@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Agendamento SaaS</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            line-height: 1.5;
+        }
+        h1, h2 { color: var(--primary); }
+        .card {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        input, select {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            box-sizing: border-box;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        #slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .slot {
+            padding: 0.5rem;
+            text-align: center;
+            border: 1px solid var(--primary);
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        .slot.selected {
+            background: var(--primary);
+            color: white;
+        }
+        .hidden { display: none; }
+        pre {
+            background: #f1f5f9;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>💈 Sistema de Agendamentos - Teste</h1>
+
+    <!-- Setup Section -->
+    <div class="card">
+        <h2>1. Configuração Inicial</h2>
+        <p>Clique abaixo para criar automaticamente: Salão, Profissional, Serviço e Horário de Trabalho.</p>
+        <button id="btnSeed" onclick="seedData()">🌱 Gerar Dados de Teste</button>
+        <div id="setupResult" class="hidden">
+            <h3>Dados Gerados:</h3>
+            <pre id="setupOutput"></pre>
+        </div>
+    </div>
+
+    <!-- Booking Section -->
+    <div class="card">
+        <h2>2. Simular Agendamento</h2>
+        
+        <div class="grid">
+            <div>
+                <label>Salão ID</label>
+                <input type="text" id="salonId" placeholder="Gerado automaticamente..." readonly>
+            </div>
+            <div>
+                <label>Profissional ID</label>
+                <input type="text" id="professionalId" placeholder="Gerado automaticamente..." readonly>
+            </div>
+        </div>
+
+        <div>
+            <label>Serviço ID</label>
+            <input type="text" id="serviceId" placeholder="Gerado automaticamente..." readonly>
+        </div>
+
+        <div class="grid">
+            <div>
+                <label>Data</label>
+                <input type="date" id="date" onchange="checkAvailability()">
+            </div>
+            <div>
+                <label>Nome do Cliente</label>
+                <input type="text" id="customerName" value="Cliente Teste">
+            </div>
+        </div>
+
+        <button onclick="checkAvailability()">🔍 Buscar Horários</button>
+
+        <div id="slotsContainer" class="hidden">
+            <h3>Horários Disponíveis</h3>
+            <div id="slots"></div>
+        </div>
+
+        <div id="bookingAction" class="hidden" style="margin-top: 1.5rem; border-top: 1px solid #eee; padding-top: 1rem;">
+            <p>Horário Selecionado: <strong id="selectedTime"></strong></p>
+            <button onclick="bookAppointment()">✅ Confirmar Agendamento</button>
+        </div>
+    </div>
+
+    <div id="logs" class="card hidden">
+        <h3>Log de Resposta</h3>
+        <pre id="logOutput"></pre>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        let selectedSlot = null;
+
+        // Auto-fill date with today
+        document.getElementById('date').valueAsDate = new Date();
+
+        async function seedData() {
+            const btn = document.getElementById('btnSeed');
+            btn.disabled = true;
+            btn.textContent = 'Gerando...';
+
+            try {
+                // 1. Create Salon (Register)
+                const salonRes = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: "Barbearia do Dev " + Math.floor(Math.random() * 1000),
+                        email: `contato${Date.now()}@salao.com`,
+                        password: "senha_forte_123", // Password added
+                        phone: "11999999999"
+                    })
+                });
+                
+                if (!salonRes.ok) {
+                    const err = await salonRes.json();
+                    throw new Error(err.error || 'Erro ao criar salão');
+                }
+
+                const registerData = await salonRes.json();
+                const salon = registerData.salon;
+                const token = registerData.token;
+
+                // 2. Create Professional
+                const profRes = await fetch(`${API_URL}/professionals`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        name: "João Barbeiro",
+                        salonId: salon.id, // Auth response returns 'id', not '_id'
+                        email: "joao@salao.com"
+                    })
+                });
+                const professional = await profRes.json();
+
+                // 3. Create Service
+                const servRes = await fetch(`${API_URL}/services`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        name: "Corte de Cabelo",
+                        price: 50,
+                        duration: 30, // 30 min
+                        salonId: salon.id
+                    })
+                });
+                const service = await servRes.json();
+
+                // 4. Create Schedule (Mon-Fri, 09:00 - 18:00)
+                const days = [1, 2, 3, 4, 5]; // Mon to Fri
+                for (const day of days) {
+                    await fetch(`${API_URL}/schedules`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            salonId: salon.id,
+                            professionalId: professional._id,
+                            dayOfWeek: day,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                            lunchStart: "12:00",
+                            lunchEnd: "13:00"
+                        })
+                    });
+                }
+
+                // Update UI
+                document.getElementById('salonId').value = salon.id;
+                document.getElementById('professionalId').value = professional._id;
+                document.getElementById('serviceId').value = service._id;
+                
+                document.getElementById('setupResult').classList.remove('hidden');
+                document.getElementById('setupOutput').textContent = JSON.stringify({
+                    salon: salon.name,
+                    email: salon.email,
+                    token: token.substring(0, 20) + '...', // Show part of token
+                    professional: professional.name,
+                    service: service.name,
+                    schedule: "Seg-Sex, 09:00-18:00"
+                }, null, 2);
+
+                alert('Dados gerados com sucesso! Agora tente buscar horários.');
+
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao gerar dados. Verifique o console.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🌱 Gerar Dados de Teste';
+            }
+        }
+
+        async function checkAvailability() {
+            const salonId = document.getElementById('salonId').value;
+            const professionalId = document.getElementById('professionalId').value;
+            const serviceId = document.getElementById('serviceId').value;
+            const date = document.getElementById('date').value;
+
+            if (!salonId || !professionalId || !serviceId || !date) {
+                alert('Por favor, gere os dados de teste primeiro e selecione uma data.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/disponibilidade/horarios?salao_id=${salonId}&profissional_id=${professionalId}&servicos=${serviceId}&data=${date}`);
+                const slots = await res.json();
+
+                const container = document.getElementById('slots');
+                container.innerHTML = '';
+                document.getElementById('slotsContainer').classList.remove('hidden');
+                document.getElementById('bookingAction').classList.add('hidden');
+                selectedSlot = null;
+
+                if (slots.length === 0) {
+                    container.innerHTML = '<p>Nenhum horário disponível para esta data.</p>';
+                    return;
+                }
+
+                slots.forEach(slotTime => {
+                    const div = document.createElement('div');
+                    div.className = 'slot';
+                    div.textContent = slotTime;
+                    div.onclick = () => selectSlot(div, slotTime);
+                    container.appendChild(div);
+                });
+
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao buscar disponibilidade.');
+            }
+        }
+
+        function selectSlot(el, time) {
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedSlot = time;
+            document.getElementById('selectedTime').textContent = time;
+            document.getElementById('bookingAction').classList.remove('hidden');
+        }
+
+        async function bookAppointment() {
+            if (!selectedSlot) return;
+
+            const salonId = document.getElementById('salonId').value;
+            const professionalId = document.getElementById('professionalId').value;
+            const serviceId = document.getElementById('serviceId').value;
+            const date = document.getElementById('date').value;
+            const customerName = document.getElementById('customerName').value;
+
+            const payload = {
+                salao_id: salonId,
+                profissional_id: professionalId,
+                data: date,
+                hora_inicio: selectedSlot,
+                servicos: [serviceId],
+                cliente: customerName
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/agendamentos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await res.json();
+                
+                document.getElementById('logs').classList.remove('hidden');
+                document.getElementById('logOutput').textContent = JSON.stringify(result, null, 2);
+
+                if (res.ok) {
+                    alert('Agendamento realizado com sucesso!');
+                    checkAvailability(); // Refresh slots
+                } else {
+                    alert('Erro: ' + (result.error || 'Falha ao agendar'));
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Erro de conexão');
+            }
+        }
+    </script>
+</body>
+</html>
