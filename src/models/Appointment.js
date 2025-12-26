@@ -44,6 +44,11 @@ const appointmentSchema = new mongoose.Schema({
   }],
   totalPrice: Number,
   finalPrice: Number, // Price effectively paid/charged
+  paymentMethod: {
+    type: String,
+    enum: ['money', 'pix', 'credit_card', 'debit_card'],
+    required: false
+  },
   origin: {
     type: String,
     enum: ['client', 'panel'],

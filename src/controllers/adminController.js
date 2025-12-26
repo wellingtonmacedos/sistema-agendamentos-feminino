@@ -234,9 +234,18 @@ exports.getReports = async (req, res) => {
 exports.finishAppointment = async (req, res) => {
     try {
         const { id } = req.params;
-        const { finalPrice } = req.body;
+        const { finalPrice, paymentMethod } = req.body;
         
-        console.log(`[Admin] Finishing appointment ${id}. Final Price Input: ${finalPrice}`);
+        console.log(`[Admin] Finishing appointment ${id}. Final Price Input: ${finalPrice}, Payment Method: ${paymentMethod}`);
+
+        if (!paymentMethod) {
+            return res.status(400).json({ error: 'Forma de pagamento é obrigatória para finalizar o atendimento.' });
+        }
+
+        const validPaymentMethods = ['money', 'pix', 'credit_card', 'debit_card'];
+        if (!validPaymentMethods.includes(paymentMethod)) {
+            return res.status(400).json({ error: 'Forma de pagamento inválida.' });
+        }
 
         const appointment = await Appointment.findOne({ _id: id, salonId: req.user.id });
         
@@ -244,8 +253,14 @@ exports.finishAppointment = async (req, res) => {
             return res.status(404).json({ error: 'Agendamento não encontrado' });
         }
         
+        if (appointment.status === 'completed') {
+             return res.status(400).json({ error: 'Agendamento já foi finalizado e não pode ser alterado.' });
+        }
+
         appointment.status = 'completed';
         appointment.realEndTime = new Date();
+        appointment.paymentMethod = paymentMethod;
+        
         if (finalPrice !== undefined) {
             appointment.finalPrice = Number(finalPrice);
         } else {

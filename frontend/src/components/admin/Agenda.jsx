@@ -30,6 +30,7 @@ const Agenda = () => {
 
     const [selectedAppointment, setSelectedAppointment] = useState(null);
     const [finalPrice, setFinalPrice] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('');
     
     // Form State (Create)
     const [formData, setFormData] = useState({
@@ -231,6 +232,7 @@ const Agenda = () => {
         setShowDetailsModal(false);
         setSelectedAppointment(apt);
         setFinalPrice(apt.totalPrice || 0);
+        setPaymentMethod('');
         setShowFinishModal(true);
     };
 
@@ -238,7 +240,8 @@ const Agenda = () => {
         e.preventDefault();
         try {
             await axios.put(`/api/appointments/${selectedAppointment._id}/finish`, {
-                finalPrice: Number(finalPrice)
+                finalPrice: Number(finalPrice),
+                paymentMethod
             });
             setShowFinishModal(false);
             const start = startOfMonth(currentDate);
@@ -559,6 +562,22 @@ const Agenda = () => {
                             <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                                 <p className="text-sm text-gray-500">Cliente: <span className="font-bold text-gray-800">{selectedAppointment.customerName}</span></p>
                                 <p className="text-sm text-gray-500">Valor Estimado: <span className="font-bold text-gray-800">R$ {selectedAppointment.totalPrice?.toFixed(2)}</span></p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
+                                <select 
+                                    required 
+                                    className="w-full p-2 border rounded-lg bg-white"
+                                    value={paymentMethod}
+                                    onChange={e => setPaymentMethod(e.target.value)}
+                                >
+                                    <option value="">Selecione...</option>
+                                    <option value="money">Dinheiro</option>
+                                    <option value="pix">Pix</option>
+                                    <option value="credit_card">Cartão de Crédito</option>
+                                    <option value="debit_card">Cartão de Débito</option>
+                                </select>
                             </div>
 
                             <div>

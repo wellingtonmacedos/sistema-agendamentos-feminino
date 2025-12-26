@@ -60,18 +60,21 @@ const getBillingReports = async (req, res) => {
 
             // By Professional
             const profName = app.professionalId ? app.professionalId.name : 'Desconhecido';
-            if (!revenueByProfessional[profName]) revenueByProfessional[profName] = 0;
-            revenueByProfessional[profName] += price;
+            if (!revenueByProfessional[profName]) {
+                revenueByProfessional[profName] = { revenue: 0, count: 0 };
+            }
+            revenueByProfessional[profName].revenue += price;
+            revenueByProfessional[profName].count += 1;
 
             // By Service
             if (app.services && app.services.length > 0) {
-                // If multiple services, how to split revenue? 
-                // Simple approach: split equally or use individual service price if available.
-                // The schema has price in services array.
                 app.services.forEach(svc => {
                     const svcPrice = svc.price || 0;
-                    if (!revenueByService[svc.name]) revenueByService[svc.name] = 0;
-                    revenueByService[svc.name] += svcPrice;
+                    if (!revenueByService[svc.name]) {
+                        revenueByService[svc.name] = { revenue: 0, count: 0 };
+                    }
+                    revenueByService[svc.name].revenue += svcPrice;
+                    revenueByService[svc.name].count += 1;
                 });
             }
         });
@@ -87,8 +90,8 @@ const getBillingReports = async (req, res) => {
                 totalAppointments,
                 averageTicket
             },
-            byProfessional: Object.entries(revenueByProfessional).map(([name, value]) => ({ name, value })),
-            byService: Object.entries(revenueByService).map(([name, value]) => ({ name, value }))
+            byProfessional: Object.entries(revenueByProfessional).map(([name, data]) => ({ name, value: data.revenue, count: data.count })),
+            byService: Object.entries(revenueByService).map(([name, data]) => ({ name, value: data.revenue, count: data.count }))
         });
 
     } catch (error) {

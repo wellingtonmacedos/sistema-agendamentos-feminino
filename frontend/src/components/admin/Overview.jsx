@@ -11,7 +11,7 @@ const Overview = () => {
 
     const fetchReports = async () => {
         try {
-            const res = await axios.get('/api/reports');
+            const res = await axios.get('/api/admin/reports');
             setStats(res.data);
         } catch (error) {
             console.error("Erro ao carregar relatórios", error);
@@ -24,9 +24,18 @@ const Overview = () => {
     if (!stats) return <div className="p-8 text-center text-gray-500">Sem dados disponíveis.</div>;
 
     // Use defaults if backend structure differs
-    const summary = stats.total || { totalRevenue: 0, totalAppointments: 0 };
-    const byService = stats.byService || [];
-    const byProfessional = stats.byProfessional || [];
+    const summary = stats.summary || { totalRevenue: 0, totalAppointments: 0 };
+    const byService = stats.byService ? stats.byService.map(item => ({
+        _id: item.name,
+        revenue: item.value,
+        count: item.count || 0
+    })) : [];
+    
+    const byProfessional = stats.byProfessional ? stats.byProfessional.map(item => ({
+        _id: item.name,
+        revenue: item.value,
+        count: item.count || 0
+    })) : [];
 
     return (
         <div className="space-y-6">
