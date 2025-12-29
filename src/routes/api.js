@@ -18,6 +18,8 @@ router.get('/services', appointmentController.getServices);
 router.get('/salons', appointmentController.getSalons);
 router.get('/professionals', appointmentController.getProfessionals);
 router.get('/customers/check', appointmentController.checkCustomer);
+router.get('/my-appointments', appointmentController.getMyAppointments);
+router.delete('/my-appointments/:id', appointmentController.cancelAppointment);
 
 // Protected: Admin / Management Routes
 

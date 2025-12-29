@@ -97,11 +97,82 @@ const getProfessionals = async (req, res) => {
         if (service_id) {
             query.services = service_id;
         }
-
-        const professionals = await require('../models/Professional').find(query, 'name _id services');
+        
+        const professionals = await require('../models/Professional').find(query);
         res.json(professionals);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao buscar profissionais' });
+    }
+};
+
+const getMyAppointments = async (req, res) => {
+    try {
+        const { phone } = req.query;
+        if (!phone) {
+            return res.status(400).json({ error: 'Telefone é obrigatório' });
+        }
+
+        // Find customer by phone to get exact match
+        // Actually, we store phone in appointment too? Yes, 'telefone' field.
+        // Let's search by appointment phone directly.
+        // We only want 'scheduled' or 'confirmed' appointments, not 'completed' or 'cancelled' (if we had that status)
+        // Assuming 'scheduled' is the default/active status.
+        // Wait, schema defaults status to 'scheduled'. Admin finishes to 'completed'.
+        // So we want appointments where status != 'completed'.
+        
+        const appointments = await require('../models/Appointment').find({
+            telefone: phone,
+            status: { $ne: 'completed' }, // Only active appointments
+            date: { $gte: new Date(new Date().setHours(0,0,0,0)) } // Only future/today appointments? Or all open? User said "em ABERTO".
+        })
+        .populate('services', 'name price duration')
+        .populate('professionalId', 'name')
+        .populate('salonId', 'name phone')
+        .sort({ date: 1, startTime: 1 });
+
+        res.json(appointments);
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Erro ao buscar agendamentos' });
+    }
+};
+
+const cancelAppointment = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone } = req.body; // Security check: must provide phone to cancel
+
+        if (!phone) {
+            return res.status(400).json({ error: 'Telefone é obrigatório para confirmação' });
+        }
+
+        const Appointment = require('../models/Appointment');
+        const appointment = await Appointment.findById(id);
+
+        if (!appointment) {
+            return res.status(404).json({ error: 'Agendamento não encontrado' });
+        }
+
+        // Verify ownership
+        if (appointment.telefone !== phone) {
+            return res.status(403).json({ error: 'Não autorizado' });
+        }
+
+        if (appointment.status === 'completed') {
+            return res.status(400).json({ error: 'Não é possível cancelar um agendamento já realizado' });
+        }
+
+        await Appointment.findByIdAndDelete(id);
+        
+        // Ideally we should notify the professional/salon here.
+        // But for now, just delete.
+        
+        res.json({ success: true, message: 'Agendamento cancelado com sucesso' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Erro ao cancelar agendamento' });
     }
 };
 
@@ -205,5 +276,7 @@ module.exports = {
   getProfessionals,
   getAllAppointments,
   updateAppointment,
-  checkCustomer
+  checkCustomer,
+  getMyAppointments,
+  cancelAppointment
 };

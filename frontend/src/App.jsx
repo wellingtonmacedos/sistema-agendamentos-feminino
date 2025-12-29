@@ -2,16 +2,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { format, addDays, startOfToday, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Send, User, Users, Calendar, Clock, Scissors, CheckCircle, Store, Briefcase, Lock } from 'lucide-react';
+import { Send, User, Users, Calendar, Clock, Scissors, CheckCircle, Store, Briefcase, Lock, Trash2, ArrowLeft, History } from 'lucide-react';
 import clsx from 'clsx';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 
 function App() {
   const [messages, setMessages] = useState([]);
-  const [step, setStep] = useState('INIT'); // INIT, IDENTIFY_PHONE, IDENTIFY_NAME, SALON, SERVICE, PROFESSIONAL, DATE, TIME, CONFIRM, SUCCESS
+  const [step, setStep] = useState('INIT'); // INIT, IDENTIFY_PHONE, IDENTIFY_NAME, SALON, SERVICE, PROFESSIONAL, DATE, TIME, CONFIRM, SUCCESS, MY_APPOINTMENTS
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
+
+  const [history, setHistory] = useState([]);
+  const [myAppointments, setMyAppointments] = useState([]);
+
+  const goToStep = (nextStep) => {
+      // Don't push INIT to history to avoid going back to a non-interactive state
+      if (step !== 'INIT') {
+        setHistory(prev => [...prev, step]);
+      }
+      setStep(nextStep);
+  };
+
+  const handleBack = () => {
+      if (history.length === 0) return;
+      const prev = history[history.length - 1];
+      setHistory(prevHist => prevHist.slice(0, -1));
+      setStep(prev);
+  };
 
   // Data
   const [salons, setSalons] = useState([]);
@@ -68,73 +86,6 @@ function App() {
 
   const initialized = useRef(false);
 
-  // Init
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    const init = async () => {
-      setLoading(true);
-
-      // Check URL for direct access
-      const path = window.location.pathname;
-      const hostname = window.location.hostname;
-      
-      // Force logout if explicitly visiting /login
-      if (path === '/login') {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setAdminUser(null);
-          setView('LOGIN');
-          setLoading(false);
-          return;
-      }
-
-      // Check for admin path or subdomain
-      if (path === '/admin' || hostname.startsWith('admin.')) {
-          setView('LOGIN');
-      }
-
-      // Check for admin session
-      const token = localStorage.getItem('token');
-      const userStr = localStorage.getItem('user');
-      if (token && userStr) {
-          try {
-              const user = JSON.parse(userStr);
-              setAdminUser(user);
-              axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-              
-              if (path === '/admin') {
-                  setView('ADMIN');
-              }
-          } catch (e) {
-              console.error("Erro ao restaurar sessão admin", e);
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-          }
-      }
-      
-      // Pre-fetch salons to check for single-tenant mode (apply branding early)
-      try {
-        const salonsRes = await axios.get('/api/salons');
-        setSalons(salonsRes.data);
-        
-        // If there's only one salon, apply its branding immediately
-        if (salonsRes.data.length === 1 && salonsRes.data[0].chatConfig) {
-            setChatConfig(prev => ({ ...prev, ...salonsRes.data[0].chatConfig }));
-        }
-      } catch (err) {
-        console.error("Erro ao carregar configurações iniciais", err);
-      }
-      
-      // Initial Greeting
-      addMessage('Olá! Sou seu assistente de agendamentos. 🤖\n\nAntes de começarmos, por favor, me informe seu **número de celular** (com DDD).');
-      setStep('IDENTIFY_PHONE');
-      setLoading(false);
-    };
-    init();
-  }, []);
-
   const handleAdminClick = () => {
     console.log("Admin click detected, current user:", adminUser);
     if (adminUser) {
@@ -163,6 +114,54 @@ function App() {
   // FLOW HANDLERS
   // ----------------------------------------------------------------------
 
+  const handleMyHistoryClick = async () => {
+    if (!booking.clientPhone) {
+        addMessage('Por favor, identifique-se primeiro para ver seus agendamentos.', 'bot');
+        goToStep('IDENTIFY_PHONE');
+        return;
+    }
+    
+    setLoading(true);
+    try {
+        const res = await axios.get(`/api/my-appointments?phone=${booking.clientPhone}`);
+        setMyAppointments(res.data);
+        if (res.data.length === 0) {
+            addMessage('Você não possui agendamentos ativos no momento.');
+        } else {
+            addMessage(`Encontrei ${res.data.length} agendamento(s) ativo(s).`);
+            goToStep('MY_APPOINTMENTS');
+        }
+    } catch (err) {
+        addMessage('Erro ao buscar seus agendamentos.');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleCancelAppointment = async (apptId) => {
+    if (!window.confirm("Tem certeza que deseja cancelar este agendamento?")) return;
+    
+    setLoading(true);
+    try {
+        await axios.delete(`/api/my-appointments/${apptId}`, {
+            data: { phone: booking.clientPhone } // Axios delete body requires 'data' key
+        });
+        
+        // Refresh
+        const res = await axios.get(`/api/my-appointments?phone=${booking.clientPhone}`);
+        setMyAppointments(res.data);
+        addMessage('Agendamento cancelado com sucesso.');
+        
+        if (res.data.length === 0) {
+            handleBack(); 
+        }
+    } catch (err) {
+        addMessage('Erro ao cancelar agendamento.');
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const handleInputSubmit = async (e) => {
     e.preventDefault();
     const val = e.target.elements.input.value.trim();
@@ -179,17 +178,20 @@ function App() {
         try {
             const res = await axios.get(`/api/customers/check?phone=${val}`);
             if (res.data.found) {
+                // Save to cache
+                localStorage.setItem('customer_phone', val);
+                
                 setBooking(prev => ({ ...prev, clientName: res.data.name }));
                 addMessage(`Olá novamente, **${res.data.name}**! Que bom te ver.`);
                 loadSalons();
             } else {
                 addMessage('Certo. Como é a primeira vez, qual seu **Nome Completo**?');
-                setStep('IDENTIFY_NAME');
+                goToStep('IDENTIFY_NAME');
             }
         } catch (err) {
             // Fallback if backend fails or offline
             addMessage('Obrigado. E qual é o seu **Nome Completo**?');
-            setStep('IDENTIFY_NAME');
+            goToStep('IDENTIFY_NAME');
         } finally {
             setLoading(false);
         }
@@ -245,7 +247,7 @@ function App() {
       setProfessionals([]);
       
       addMessage(`Vamos agendar? Escolha o serviço que deseja:`);
-      setStep('SERVICE');
+      goToStep('SERVICE');
     } catch (err) {
       addMessage('Erro ao carregar serviços.');
     } finally {
@@ -264,24 +266,14 @@ function App() {
         
         if (res.data.length > 0) {
             addMessage(`Você tem preferência por algum profissional?`);
-            setStep('PROFESSIONAL');
+            goToStep('PROFESSIONAL');
         } else {
-            // Fallback if no specific professional found (e.g. not configured yet)
-            // Try fetching all professionals as fallback or show error
-            // For now, let's assume if 0, maybe all can do it? Or just show message?
-            // User requested fix, so likely they will configure it.
-            // If empty, we can't really proceed if backend requires professional_id.
-            // But let's try fetching all if filtered returns none, to support legacy/unconfigured data?
-            // No, that defeats the purpose of filtering.
-            // But if the user hasn't configured services for professionals yet, this will block the flow.
-            // Let's fallback to ALL if filtered is empty, with a console warning.
-            
             const allRes = await axios.get(`/api/professionals?salao_id=${booking.salon._id}`);
             if (allRes.data.length > 0) {
                 console.warn("No professionals matched service, falling back to all.");
                 setProfessionals(allRes.data);
                 addMessage(`Você tem preferência por algum profissional?`);
-                setStep('PROFESSIONAL');
+                goToStep('PROFESSIONAL');
             } else {
                 addMessage('Não há profissionais disponíveis para este serviço no momento.');
             }
@@ -299,23 +291,14 @@ function App() {
         setBooking(prev => ({ ...prev, professional: prof }));
     } else {
         addMessage('Sem preferência', 'user');
-        // If "Any", we might need logic to find ANY available slot across pros.
-        // For now, let's pick the first one or handle backend logic for "any".
-        // To keep it simple, let's just pick the first one or ask user to pick one.
-        // But prompt says "Perguntar profissional (opcional)".
-        // If user says "Sem preferência", we usually pick one internally or show all slots.
-        // Current backend expects a professional_id. Let's pick the first one for simplicity or logic.
-        // BETTER: Let's pick the first available one in logic, but for now, let's just pick the first one.
         setBooking(prev => ({ ...prev, professional: professionals[0] }));
     }
     
     addMessage('Entendido. Para qual dia você gostaria de verificar a disponibilidade?');
-    setStep('DATE');
+    goToStep('DATE');
   };
 
   const handleDateSelect = async (dateStr) => {
-    // Parse the date string as local date (yyyy-MM-dd) to avoid UTC shift
-    // We append T00:00:00 to force local time parsing if needed, or just use parse
     const dateObj = parse(dateStr, 'yyyy-MM-dd', new Date());
     const formattedDate = format(dateObj, 'dd/MM/yyyy');
     
@@ -340,10 +323,10 @@ function App() {
       setAvailableSlots(res.data);
       if (res.data.length > 0) {
         addMessage(`Encontrei estes horários para ${formattedDate}:`);
-        setStep('TIME');
+        goToStep('TIME');
       } else {
         addMessage(`Não há horários livres para ${formattedDate}. Por favor, escolha outra data.`);
-        setStep('DATE');
+        goToStep('DATE');
       }
     } catch (err) {
       console.error(err);
@@ -358,7 +341,7 @@ function App() {
     setBooking(prev => ({ ...prev, time }));
     
     addMessage('Perfeito. Por favor, confira os dados do agendamento:');
-    setStep('CONFIRM');
+    goToStep('CONFIRM');
   };
 
   const handleConfirm = async () => {
@@ -375,8 +358,11 @@ function App() {
         telefone: booking.clientPhone
       });
       
+      // Save phone to cache on success
+      localStorage.setItem('customer_phone', booking.clientPhone);
+
       addMessage(`Agendamento Confirmado! 🎉\n${booking.service.name} com ${booking.professional.name}\nDia ${format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'dd/MM')} às ${booking.time}.`);
-      setStep('SUCCESS');
+      goToStep('SUCCESS');
     } catch (err) {
       addMessage('Ocorreu um erro ao finalizar. Tente novamente.');
     } finally {
@@ -544,10 +530,152 @@ function App() {
                 </button>
             </div>
         );
+      case 'MY_APPOINTMENTS':
+        return (
+            <div className="space-y-3">
+                {myAppointments.map(appt => (
+                    <div key={appt._id} className="card bg-white border p-3 rounded-xl shadow-sm">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <div className="font-bold text-slate-800">{appt.services.map(s => s.name).join(', ')}</div>
+                                <div className="text-sm text-slate-500">{appt.salonId.name}</div>
+                            </div>
+                            <div className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">
+                                Agendado
+                            </div>
+                        </div>
+                        
+                        <div className="text-sm space-y-1 mb-3">
+                            <div className="flex items-center gap-2 text-slate-600">
+                                <Calendar size={14} />
+                                {format(parse(appt.date.split('T')[0], 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')}
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-600">
+                                <Clock size={14} />
+                                {appt.startTime || appt.hora_inicio || '00:00'}
+                            </div>
+                            {appt.professionalId && (
+                                <div className="flex items-center gap-2 text-slate-600">
+                                    <User size={14} />
+                                    {appt.professionalId.name}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <button 
+                            onClick={() => handleCancelAppointment(appt._id)}
+                            className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Trash2 size={16} /> Cancelar Agendamento
+                        </button>
+                    </div>
+                ))}
+                <button 
+                    onClick={handleBack}
+                    className="w-full py-3 text-slate-500 text-sm hover:underline"
+                >
+                    Voltar
+                </button>
+            </div>
+        );
       default:
         return null;
     }
   };
+
+  // Init
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    const init = async () => {
+      setLoading(true);
+
+      const path = window.location.pathname;
+      const hostname = window.location.hostname;
+      
+      if (path === '/login') {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setAdminUser(null);
+          setView('LOGIN');
+          setLoading(false);
+          return;
+      }
+
+      if (path === '/admin' || hostname.startsWith('admin.')) {
+          setView('LOGIN');
+      }
+
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
+      if (token && userStr) {
+          try {
+              const user = JSON.parse(userStr);
+              setAdminUser(user);
+              axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+              
+              if (path === '/admin') {
+                  setView('ADMIN');
+              }
+          } catch (e) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+          }
+      }
+      
+      // Load Salons & Check Cache
+      try {
+        const salonsRes = await axios.get('/api/salons');
+        setSalons(salonsRes.data);
+        
+        if (salonsRes.data.length === 1 && salonsRes.data[0].chatConfig) {
+            setChatConfig(prev => ({ ...prev, ...salonsRes.data[0].chatConfig }));
+        }
+
+        // CACHE CHECK
+        const cachedPhone = localStorage.getItem('customer_phone');
+        let customerFound = false;
+
+        if (cachedPhone) {
+            try {
+                const res = await axios.get(`/api/customers/check?phone=${cachedPhone}`);
+                if (res.data.found) {
+                    customerFound = true;
+                    setBooking(prev => ({ ...prev, clientPhone: cachedPhone, clientName: res.data.name }));
+                    addMessage(`Olá novamente, **${res.data.name}**! 👋 (Reconhecido pelo seu dispositivo)`);
+                    
+                    // Skip to Salon selection
+                    if (salonsRes.data.length > 0) {
+                        if (salonsRes.data.length === 1) {
+                            handleSalonSelect(salonsRes.data[0], true);
+                        } else {
+                            setStep('SALON');
+                            addMessage('Selecione o estabelecimento:');
+                        }
+                    } else {
+                        addMessage('Nenhum estabelecimento encontrado.');
+                    }
+                }
+            } catch (e) {
+                console.error("Cache check failed", e);
+            }
+        }
+
+        if (!customerFound) {
+            addMessage('Olá! Sou seu assistente de agendamentos. 🤖\n\nAntes de começarmos, por favor, me informe seu **número de celular** (com DDD).');
+            setStep('IDENTIFY_PHONE');
+        }
+
+      } catch (err) {
+        console.error("Erro ao carregar inicial", err);
+        addMessage('Erro ao conectar com o servidor.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, []);
 
   if (view === 'LOGIN') {
     return <AdminLogin onLogin={handleLoginSuccess} />;
@@ -565,25 +693,32 @@ function App() {
             className="border-b p-4 flex items-center gap-3 sticky top-0 z-10"
             style={{ backgroundColor: chatConfig.headerColor }}
         >
-          <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gray-100 text-gray-500">
-            {chatConfig.showAvatar && chatConfig.avatarUrl ? (
-                <img src={chatConfig.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-                <Store size={20} />
-            )}
-          </div>
-          <div>
+          {history.length > 0 ? (
+            <button onClick={handleBack} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
+                <ArrowLeft size={20} style={{ color: chatConfig.headerTextColor }} />
+            </button>
+          ) : (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gray-100 text-gray-500">
+                {chatConfig.showAvatar && chatConfig.avatarUrl ? (
+                    <img src={chatConfig.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                    <Store size={20} />
+                )}
+            </div>
+          )}
+          
+          <div className="flex-1">
             <h1 className="font-bold text-lg" style={{ color: chatConfig.headerTextColor }}>{chatConfig.assistantName}</h1>
             <p className="text-xs text-green-500 flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Online agora
             </p>
           </div>
-          <div className="ml-auto flex gap-2">
+          <div className="flex gap-2">
+            <button onClick={handleMyHistoryClick} className="text-gray-400 hover:text-gray-600 p-1" title="Meus Agendamentos">
+                <Calendar size={20} />
+            </button>
             <button onClick={handleAdminClick} className="text-gray-400 hover:text-gray-600 p-1" title="Área Administrativa">
                 <Lock size={16} />
-            </button>
-            <button onClick={() => window.location.reload()} className="text-xs text-gray-400 hover:text-gray-600">
-                Reiniciar
             </button>
           </div>
         </div>
