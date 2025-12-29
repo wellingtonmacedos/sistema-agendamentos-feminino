@@ -112,28 +112,35 @@ const getMyAppointments = async (req, res) => {
             return res.status(400).json({ error: 'Telefone é obrigatório' });
         }
 
-        // Find customer by phone to get exact match
-        // Actually, we store phone in appointment too? Yes, 'telefone' field.
-        // Let's search by appointment phone directly.
-        // We only want 'scheduled' or 'confirmed' appointments, not 'completed' or 'cancelled' (if we had that status)
-        // Assuming 'scheduled' is the default/active status.
-        // Wait, schema defaults status to 'scheduled'. Admin finishes to 'completed'.
-        // So we want appointments where status != 'completed'.
+        console.log(`Buscando agendamentos para telefone: ${phone}`);
+        const cleanPhone = phone.replace(/\D/g, '');
+
+        // Find appointments by customerPhone (match exact or clean)
+        // Also ensure date is correct (gte today at 00:00)
         
+        // Fix: Field in Appointment model is 'customerPhone', not 'telefone'
         const appointments = await require('../models/Appointment').find({
-            telefone: phone,
+            $or: [
+                { customerPhone: phone },
+                { customerPhone: cleanPhone }
+            ],
             status: { $ne: 'completed' }, // Only active appointments
-            date: { $gte: new Date(new Date().setHours(0,0,0,0)) } // Only future/today appointments? Or all open? User said "em ABERTO".
+            // Relax date filter to include any future appointment, even if time zone shifts slightly
+            // Ideally, handle timezones, but for now just ensure it's not way in the past.
+            // Actually, 'completed' status is the main filter for "open".
+            // But let's keep date check to avoid very old "confirmed" ghosts if any.
+            date: { $gte: new Date(new Date().setHours(0,0,0,0)) }
         })
         .populate('services', 'name price duration')
         .populate('professionalId', 'name')
         .populate('salonId', 'name phone')
         .sort({ date: 1, startTime: 1 });
 
+        console.log(`Encontrados ${appointments.length} agendamentos.`);
         res.json(appointments);
 
     } catch (error) {
-        console.error(error);
+        console.error("Erro ao buscar agendamentos:", error);
         res.status(500).json({ error: 'Erro ao buscar agendamentos' });
     }
 };
