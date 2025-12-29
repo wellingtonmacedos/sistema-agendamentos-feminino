@@ -112,12 +112,13 @@ const getMyAppointments = async (req, res) => {
             return res.status(400).json({ error: 'Telefone é obrigatório' });
         }
 
-        console.log(`Buscando agendamentos para telefone: ${phone}`);
         const cleanPhone = phone.replace(/\D/g, '');
-
-        // Find appointments by customerPhone (match exact or clean)
-        // Also ensure date is correct (gte today at 00:00)
+        console.log(`Buscando agendamentos para telefone: ${phone} (Clean: ${cleanPhone})`);
         
+        // Debug: Check ALL appointments in DB to see what exists
+        const allAppts = await require('../models/Appointment').find({}, 'customerPhone date status');
+        console.log("DEBUG - Todos agendamentos no banco:", JSON.stringify(allAppts, null, 2));
+
         // Fix: Field in Appointment model is 'customerPhone', not 'telefone'
         const appointments = await require('../models/Appointment').find({
             $or: [
@@ -125,11 +126,6 @@ const getMyAppointments = async (req, res) => {
                 { customerPhone: cleanPhone }
             ],
             status: { $ne: 'completed' }, // Only active appointments
-            // Relax date filter to include any future appointment, even if time zone shifts slightly
-            // Ideally, handle timezones, but for now just ensure it's not way in the past.
-            // Actually, 'completed' status is the main filter for "open".
-            // But let's keep date check to avoid very old "confirmed" ghosts if any.
-            date: { $gte: new Date(new Date().setHours(0,0,0,0)) }
         })
         .populate('services', 'name price duration')
         .populate('professionalId', 'name')
@@ -161,8 +157,12 @@ const cancelAppointment = async (req, res) => {
             return res.status(404).json({ error: 'Agendamento não encontrado' });
         }
 
-        // Verify ownership
-        if (appointment.telefone !== phone) {
+        // Verify ownership (compare clean phones)
+        const cleanPhoneInput = phone.replace(/\D/g, '');
+        const cleanPhoneStored = appointment.customerPhone ? appointment.customerPhone.replace(/\D/g, '') : '';
+        
+        if (cleanPhoneStored !== cleanPhoneInput) {
+            console.log(`Cancel auth failed: Stored=${cleanPhoneStored} vs Input=${cleanPhoneInput}`);
             return res.status(403).json({ error: 'Não autorizado' });
         }
 

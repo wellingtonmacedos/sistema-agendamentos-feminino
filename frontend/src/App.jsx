@@ -552,7 +552,27 @@ function App() {
                             </div>
                             <div className="flex items-center gap-2 text-slate-600">
                                 <Clock size={14} />
-                                {appt.startTime || appt.hora_inicio || '00:00'}
+                                {(() => {
+                                    try {
+                                        // If we have the raw input string 'hora_inicio' (some backends might send it), prefer it
+                                        if (appt.hora_inicio && typeof appt.hora_inicio === 'string' && appt.hora_inicio.includes(':')) {
+                                            return appt.hora_inicio;
+                                        }
+
+                                        // Otherwise parse the ISO startTime
+                                        // We use new Date() to ensure the browser converts UTC back to Local Time
+                                        if (appt.startTime) {
+                                            const date = new Date(appt.startTime);
+                                            if (!isNaN(date.getTime())) {
+                                                return format(date, 'HH:mm');
+                                            }
+                                        }
+
+                                        return '00:00';
+                                    } catch (e) {
+                                        return '00:00';
+                                    }
+                                })()}
                             </div>
                             {appt.professionalId && (
                                 <div className="flex items-center gap-2 text-slate-600">
@@ -714,10 +734,15 @@ function App() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleMyHistoryClick} className="text-gray-400 hover:text-gray-600 p-1" title="Meus Agendamentos">
-                <Calendar size={20} />
+            <button 
+                onClick={handleMyHistoryClick} 
+                className="text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm transition-all"
+                title="Ver meus agendamentos"
+            >
+                <Calendar size={14} /> 
+                Meus Agendamentos
             </button>
-            <button onClick={handleAdminClick} className="text-gray-400 hover:text-gray-600 p-1" title="Área Administrativa">
+            <button onClick={handleAdminClick} className="text-gray-400 hover:text-gray-600 p-1 ml-1" title="Área Administrativa">
                 <Lock size={16} />
             </button>
           </div>
