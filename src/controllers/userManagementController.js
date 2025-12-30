@@ -20,14 +20,29 @@ const logAction = async (action, performedBy, target, details, ip) => {
 
 const listAdmins = async (req, res) => {
     try {
-        // Lista apenas ADMINs (não Super Admins) e que não foram excluídos
-        const admins = await Salon.find({ 
-            role: 'ADMIN', 
-            deletedAt: null 
-        }).select('-password');
+        // Lista ADMINs (role='ADMIN' ou sem role definido) e que não foram excluídos
+        // Exclui explicitamente SUPER_ADMIN para evitar listar a si mesmo
+        const query = {
+            $and: [
+                {
+                    $or: [
+                        { role: 'ADMIN' },
+                        { role: { $exists: false } },
+                        { role: null }
+                    ]
+                },
+                { role: { $ne: 'SUPER_ADMIN' } },
+                { deletedAt: null }
+            ]
+        };
+
+        const admins = await Salon.find(query).select('-password');
+        
+        console.log(`[SuperAdmin] Listando administradores: ${admins.length} encontrados.`);
+        
         res.json(admins);
     } catch (error) {
-        console.error(error);
+        console.error('Erro ao listar administradores:', error);
         res.status(500).json({ error: 'Erro ao listar administradores' });
     }
 };
