@@ -642,19 +642,35 @@ function App() {
       }
 
       const token = localStorage.getItem('token');
-      const userStr = localStorage.getItem('user');
-      if (token && userStr) {
+      // Always try to validate token and get fresh user data
+      if (token) {
           try {
-              const user = JSON.parse(userStr);
-              setAdminUser(user);
               axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+              const meRes = await axios.get('/api/me');
+              const user = meRes.data;
               
+              setAdminUser(user);
+              localStorage.setItem('user', JSON.stringify(user));
+
               if (path === '/admin') {
                   setView('ADMIN');
               }
           } catch (e) {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
+              console.error("Token validation failed", e);
+              // Only clear if it's an auth error, not network error
+              if (e.response && (e.response.status === 401 || e.response.status === 403)) {
+                  localStorage.removeItem('token');
+                  localStorage.removeItem('user');
+                  setAdminUser(null);
+                  if (path === '/admin') setView('LOGIN');
+              } else {
+                  // Fallback to local storage if network error
+                  const userStr = localStorage.getItem('user');
+                  if (userStr) {
+                      setAdminUser(JSON.parse(userStr));
+                      if (path === '/admin') setView('ADMIN');
+                  }
+              }
           }
       }
       
