@@ -15,6 +15,18 @@ exports.updateSalon = async (req, res) => {
     delete updates.password;
     delete updates.email; // Usually email change requires verification
 
+    // Ensure chatConfig is properly merged if present
+    if (updates.chatConfig) {
+        const salon = await Salon.findById(req.user.id);
+        if (salon) {
+             // Merge existing chatConfig with new updates to avoid overwriting nested fields if partial update
+             // Mongoose Map/Object handling can be tricky with partial updates depending on how it's sent
+             // But since we are likely sending the whole object from frontend, direct assignment might be okay.
+             // However, let's be safe and merge.
+             updates.chatConfig = { ...salon.chatConfig, ...updates.chatConfig };
+        }
+    }
+
     const salon = await Salon.findByIdAndUpdate(req.user.id, updates, { new: true });
     res.json(salon);
   } catch (error) {

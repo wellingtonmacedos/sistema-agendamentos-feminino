@@ -54,7 +54,11 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    let { email } = req.body;
+
+    // Normalize email
+    if (email) email = email.trim();
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
@@ -62,16 +66,28 @@ const login = async (req, res) => {
 
     const salon = await Salon.findOne({ email });
     if (!salon) {
+      console.log(`Login failed: Email ${email} not found.`);
+      return res.status(400).json({ error: 'Credenciais inválidas' });
+    }
+
+    if (!salon.active) {
+      console.log(`Login failed: Account ${email} is inactive.`);
+      return res.status(403).json({ error: 'Conta desativada. Contate o administrador.' });
+    }
+
+    if (salon.deletedAt) {
+      console.log(`Login failed: Account ${email} is deleted.`);
       return res.status(400).json({ error: 'Credenciais inválidas' });
     }
 
     const isMatch = await bcrypt.compare(password, salon.password);
     if (!isMatch) {
+      console.log(`Login failed: Password mismatch for ${email}.`);
       return res.status(400).json({ error: 'Credenciais inválidas' });
     }
 
     const token = jwt.sign(
-      { id: salon._id, email: salon.email },
+      { id: salon._id, email: salon.email, role: salon.role || 'ADMIN' },
       JWT_SECRET,
       { expiresIn: '1d' }
     );
@@ -82,7 +98,8 @@ const login = async (req, res) => {
       salon: {
         id: salon._id,
         name: salon.name,
-        email: salon.email
+        email: salon.email,
+        role: salon.role || 'ADMIN'
       }
     });
 

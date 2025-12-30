@@ -50,6 +50,7 @@ const Agenda = () => {
     // Customer Search State
     const [customerSuggestions, setCustomerSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [isManualCustomer, setIsManualCustomer] = useState(false); // Toggle between Search and Manual inputs
 
     const user = JSON.parse(localStorage.getItem('user'));
 
@@ -138,10 +139,17 @@ const Agenda = () => {
         if (formData.date && formData.professionalId && formData.serviceId && showModal) {
             fetchSlots();
         }
-    }, [formData.date, formData.professionalId, formData.serviceId]);
+    }, [formData.date, formData.professionalId, formData.serviceId, showModal]);
 
     const fetchSlots = async () => {
         try {
+            console.log("Fetching slots with params:", {
+                salao_id: user.id,
+                data: formData.date,
+                profissional_id: formData.professionalId,
+                servicos: formData.serviceId
+            });
+
             const res = await axios.get('/api/disponibilidade/horarios', {
                 params: {
                     salao_id: user.id,
@@ -157,7 +165,8 @@ const Agenda = () => {
     };
 
     const handleCustomerSearch = async (term) => {
-        setFormData(prev => ({ ...prev, clientName: term }));
+        setFormData({ ...formData, clientName: term });
+        
         if (term.length < 3) {
             setCustomerSuggestions([]);
             setShowSuggestions(false);
@@ -166,7 +175,7 @@ const Agenda = () => {
 
         try {
             const res = await axios.get('/api/admin/customers', {
-                params: { search: term, limit: 5 }
+                params: { search: term }
             });
             setCustomerSuggestions(res.data.customers);
             setShowSuggestions(true);
@@ -176,12 +185,23 @@ const Agenda = () => {
     };
 
     const selectCustomer = (customer) => {
-        setFormData(prev => ({
-            ...prev,
+        setFormData({
+            ...formData,
             clientName: customer.name,
             clientPhone: customer.phone
-        }));
+        });
+        setCustomerSuggestions([]);
         setShowSuggestions(false);
+        setIsManualCustomer(false); // Mantém modo busca, mas com valor selecionado (visualmente tratado abaixo)
+    };
+
+    const clearCustomerSelection = () => {
+        setFormData({
+            ...formData,
+            clientName: '',
+            clientPhone: ''
+        });
+        setIsManualCustomer(false);
     };
 
     // Calendar Actions
@@ -400,55 +420,127 @@ const Agenda = () => {
                                     className="w-full p-2 border rounded-lg bg-white"
                                     value={formData.time}
                                     onChange={e => setFormData({...formData, time: e.target.value})}
-                                    disabled={!formData.date || !formData.professionalId}
+                                    disabled={!formData.date || !formData.professionalId || !formData.serviceId}
                                 >
                                     <option value="">Selecione...</option>
                                     {availableSlots.map(t => (
                                         <option key={t} value={t}>{t}</option>
                                     ))}
                                 </select>
-                                {availableSlots.length === 0 && formData.date && (
-                                    <p className="text-xs text-orange-500 mt-1">Nenhum horário disponível.</p>
+                                {availableSlots.length === 0 && formData.date && formData.professionalId && formData.serviceId && (
+                                    <p className="text-xs text-orange-500 mt-1">Nenhum horário disponível para esta combinação.</p>
                                 )}
                             </div>
 
-                            {/* 5. Client Info */}
-                            <div className="pt-4 border-t border-dashed relative">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Cliente</label>
-                                <input 
-                                    type="text" 
-                                    required 
-                                    className="w-full p-2 border rounded-lg"
-                                    value={formData.clientName}
-                                    onChange={e => handleCustomerSearch(e.target.value)}
-                                    placeholder="Digite para buscar..."
-                                    autoComplete="off"
-                                />
-                                {showSuggestions && customerSuggestions.length > 0 && (
-                                    <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
-                                        {customerSuggestions.map(c => (
-                                            <div 
-                                                key={c._id}
-                                                className="p-2 hover:bg-blue-50 cursor-pointer border-b last:border-0"
-                                                onClick={() => selectCustomer(c)}
-                                            >
-                                                <p className="font-medium text-sm text-gray-800">{c.name}</p>
-                                                <p className="text-xs text-gray-500">{c.phone}</p>
+                            {/* 1. Customer Selection */}
+                            <div className="relative pt-4 border-t border-dashed">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                                
+                                {!isManualCustomer && formData.clientPhone ? (
+                                    // Selected Customer View
+                                    <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <div>
+                                            <p className="font-medium text-blue-900">{formData.clientName}</p>
+                                            <p className="text-sm text-blue-700">{formData.clientPhone}</p>
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onClick={clearCustomerSelection}
+                                            className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+                                        >
+                                            Alterar
+                                        </button>
+                                    </div>
+                                ) : !isManualCustomer ? (
+                                    // Search Mode
+                                    <div className="relative">
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                className="w-full p-2 border rounded-lg pl-8"
+                                                placeholder="Buscar por nome ou telefone..."
+                                                value={formData.clientName}
+                                                onChange={(e) => handleCustomerSearch(e.target.value)}
+                                                onFocus={() => formData.clientName.length >= 3 && setShowSuggestions(true)}
+                                            />
+                                            <svg className="w-4 h-4 absolute left-2.5 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+
+                                        {/* Suggestions Dropdown */}
+                                        {showSuggestions && (
+                                            <div className="absolute z-50 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                                                {customerSuggestions.length > 0 ? (
+                                                    customerSuggestions.map(c => (
+                                                        <div
+                                                            key={c._id}
+                                                            className="p-2 hover:bg-gray-50 cursor-pointer border-b last:border-0"
+                                                            onClick={() => selectCustomer(c)}
+                                                        >
+                                                            <p className="font-medium">{c.name}</p>
+                                                            <p className="text-xs text-gray-500">{c.phone}</p>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-3 text-center text-gray-500 text-sm">
+                                                        Nenhum cliente encontrado.
+                                                    </div>
+                                                )}
+                                                
+                                                <div 
+                                                    className="p-2 bg-gray-50 border-t cursor-pointer hover:bg-gray-100 text-blue-600 text-center text-sm font-medium"
+                                                    onClick={() => {
+                                                        setIsManualCustomer(true);
+                                                        setShowSuggestions(false);
+                                                        setFormData({...formData, clientName: '', clientPhone: ''});
+                                                    }}
+                                                >
+                                                    + Cadastrar Novo Cliente
+                                                </div>
                                             </div>
-                                        ))}
+                                        )}
+                                    </div>
+                                ) : (
+                                    // Manual Creation Mode
+                                    <div className="p-3 border rounded-lg bg-gray-50 space-y-3">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-bold text-gray-500 uppercase">Novo Cliente</span>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    setIsManualCustomer(false);
+                                                    setFormData({...formData, clientName: '', clientPhone: ''});
+                                                }}
+                                                className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                            >
+                                                Voltar para busca
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Nome Completo</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                className="w-full p-2 border rounded bg-white"
+                                                value={formData.clientName}
+                                                onChange={e => setFormData({...formData, clientName: e.target.value})}
+                                                placeholder="Ex: João Silva"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Telefone (WhatsApp)</label>
+                                            <input
+                                                type="tel"
+                                                required
+                                                className="w-full p-2 border rounded bg-white"
+                                                value={formData.clientPhone}
+                                                onChange={e => setFormData({...formData, clientPhone: e.target.value})}
+                                                placeholder="Ex: 11999999999"
+                                            />
+                                        </div>
                                     </div>
                                 )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                                <input 
-                                    type="tel" 
-                                    required 
-                                    className="w-full p-2 border rounded-lg"
-                                    value={formData.clientPhone}
-                                    onChange={e => setFormData({...formData, clientPhone: e.target.value})}
-                                />
                             </div>
 
                             <button 

@@ -7,6 +7,8 @@ const getAvailability = async (req, res) => {
   try {
     const { salao_id, data, profissional_id, servicos } = req.query;
 
+    console.log(`[Availability Check] Salon: ${salao_id}, Date: ${data}, Prof: ${profissional_id}, Services: ${servicos}`);
+
     if (!salao_id || !data || !profissional_id || !servicos) {
       return res.status(400).json({ error: 'Parâmetros obrigatórios: salao_id, data, profissional_id, servicos' });
     }
@@ -81,8 +83,10 @@ const getServices = async (req, res) => {
 
 const getSalons = async (req, res) => {
     try {
-        // Just return minimal info for the selector
-        const salons = await require('../models/Salon').find({}, 'name _id phone chatConfig');
+        // Just return minimal info for the selector, excluding SUPER_ADMIN
+        const salons = await require('../models/Salon').find({
+            role: { $ne: 'SUPER_ADMIN' }
+        }, 'name _id phone chatConfig');
         res.json(salons);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao buscar salões' });

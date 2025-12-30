@@ -65,6 +65,20 @@ function App() {
     avatarUrl: '',
     showAvatar: true
    });
+
+   useEffect(() => {
+    const fetchChatConfig = async () => {
+        try {
+            const res = await axios.get('/api/public/config');
+            if (res.data && Object.keys(res.data).length > 0) {
+                setChatConfig(prev => ({ ...prev, ...res.data }));
+            }
+        } catch (error) {
+            console.error("Erro ao carregar config do chat:", error);
+        }
+    };
+    fetchChatConfig();
+  }, []);
  
    useEffect(() => {
      document.documentElement.style.setProperty('--accent-color', chatConfig.buttonColor);

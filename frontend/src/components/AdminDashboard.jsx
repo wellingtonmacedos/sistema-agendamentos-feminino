@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     LayoutDashboard, 
     Calendar, 
@@ -9,7 +9,8 @@ import {
     Menu,
     X,
     MessageSquare,
-    BarChart2
+    BarChart2,
+    Shield
 } from 'lucide-react';
 
 import Overview from './admin/Overview';
@@ -20,24 +21,45 @@ import Professionals from './admin/Professionals';
 import Customers from './admin/Customers';
 import ChatSettings from './admin/ChatSettings';
 import Settings from './admin/Settings';
+import SuperAdminUsers from './admin/SuperAdminUsers';
 
 const AdminDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    const tabs = [
-        { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
-        { id: 'agenda', label: 'Agenda', icon: Calendar },
-        { id: 'reports', label: 'Relatórios', icon: BarChart2 },
-        { id: 'customers', label: 'Clientes', icon: Users },
-        { id: 'services', label: 'Serviços', icon: Scissors },
-        { id: 'professionals', label: 'Profissionais', icon: Users },
-        { id: 'chat-settings', label: 'Personalizar Chat', icon: MessageSquare }, // Added icon in import
-        { id: 'settings', label: 'Configurações', icon: SettingsIcon },
-    ];
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+    // Set default tab for Super Admin
+    useEffect(() => {
+        if (isSuperAdmin && activeTab === 'overview') {
+            setActiveTab('users');
+        }
+    }, [isSuperAdmin, activeTab]);
+
+    let tabs = [];
+
+    if (isSuperAdmin) {
+        tabs = [
+            { id: 'users', label: 'Gestão de Admins', icon: Shield },
+            // Super Admin might want to see logs or settings later
+        ];
+    } else {
+        tabs = [
+            { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
+            { id: 'agenda', label: 'Agenda', icon: Calendar },
+            { id: 'reports', label: 'Relatórios', icon: BarChart2 },
+            { id: 'customers', label: 'Clientes', icon: Users },
+            { id: 'services', label: 'Serviços', icon: Scissors },
+            { id: 'professionals', label: 'Profissionais', icon: Users },
+            { id: 'chat-settings', label: 'Personalizar Chat', icon: MessageSquare },
+            { id: 'settings', label: 'Configurações', icon: SettingsIcon },
+        ];
+    }
 
     const renderContent = () => {
         switch (activeTab) {
+            case 'users': return <SuperAdminUsers />;
+            case 'audit-logs': return <AuditLogs />;
             case 'overview': return <Overview />;
             case 'agenda': return <Agenda />;
             case 'reports': return <Reports />;
@@ -46,7 +68,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             case 'professionals': return <Professionals />;
             case 'chat-settings': return <ChatSettings />;
             case 'settings': return <Settings />;
-            default: return <Overview />;
+            default: return isSuperAdmin ? <SuperAdminUsers /> : <Overview />;
         }
     };
 
@@ -55,7 +77,9 @@ const AdminDashboard = ({ user, onLogout }) => {
             {/* Sidebar (Desktop) */}
             <aside className="hidden md:flex flex-col w-64 bg-white border-r h-screen sticky top-0">
                 <div className="p-6 border-b">
-                    <h1 className="text-xl font-bold text-gray-800">Painel Salão</h1>
+                    <h1 className="text-xl font-bold text-gray-800">
+                        {isSuperAdmin ? 'Super Admin' : 'Painel Salão'}
+                    </h1>
                     <p className="text-xs text-gray-500 mt-1">{user?.name}</p>
                 </div>
                 
@@ -91,7 +115,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="flex-1 flex flex-col min-w-0">
                 {/* Mobile Header */}
                 <header className="md:hidden bg-white border-b px-4 py-3 flex justify-between items-center sticky top-0 z-20">
-                    <h1 className="font-bold text-gray-800">Painel Administrativo</h1>
+                    <h1 className="font-bold text-gray-800">{isSuperAdmin ? 'Super Admin' : 'Painel Administrativo'}</h1>
                     <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2">
                         {mobileMenuOpen ? <X /> : <Menu />}
                     </button>

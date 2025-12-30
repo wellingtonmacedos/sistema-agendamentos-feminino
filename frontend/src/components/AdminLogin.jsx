@@ -24,8 +24,8 @@ const AdminLogin = ({ onLogin }) => {
     try {
       const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
       const payload = isRegistering 
-        ? { name, email, password, phone }
-        : { email, password };
+        ? { name, email: email.trim(), password, phone }
+        : { email: email.trim(), password };
 
       const res = await axios.post(endpoint, payload);
       const { token, user, salon } = res.data;

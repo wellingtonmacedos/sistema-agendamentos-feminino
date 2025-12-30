@@ -5,7 +5,8 @@ const adminController = require('../controllers/adminController');
 const reportController = require('../controllers/reportController');
 const authController = require('../controllers/authController');
 const customerController = require('../controllers/customerController');
-const authMiddleware = require('../middlewares/authMiddleware');
+const { authMiddleware, checkRole } = require('../middlewares/authMiddleware');
+const userManagementController = require('../controllers/userManagementController');
 
 // Auth Routes
 router.post('/auth/register', authController.register);
@@ -50,13 +51,55 @@ router.get('/me', authMiddleware, async (req, res) => {
     try {
         const salon = await require('../models/Salon').findById(req.user.id);
         if (!salon) return res.status(404).json({ error: 'Salão não encontrado' });
-        res.json(salon);
+        
+        // Return safe data
+        res.json({
+            id: salon._id,
+            name: salon.name,
+            email: salon.email,
+            role: salon.role,
+            workingHours: salon.workingHours,
+            settings: salon.settings,
+            chatConfig: salon.chatConfig // Include chatConfig
+        });
     } catch (error) {
         res.status(500).json({ error: 'Erro ao buscar dados do salão' });
     }
 });
 
+// Public: Get Chat Config (from first available salon or default)
+router.get('/public/config', async (req, res) => {
+    try {
+        const Salon = require('../models/Salon');
+        // Get the first active salon (excluding SUPER_ADMIN)
+        const salon = await Salon.findOne({ 
+            active: true, 
+            deletedAt: null,
+            role: { $ne: 'SUPER_ADMIN' }
+        });
+        
+        if (salon && salon.chatConfig) {
+            res.json(salon.chatConfig);
+        } else {
+            // Default config if no salon or no config
+            res.json({}); 
+        }
+    } catch (error) {
+        console.error("Error fetching public config:", error);
+        res.status(500).json({ error: 'Erro ao buscar configurações' });
+    }
+});
+
+
 router.get('/admin/appointments', authMiddleware, appointmentController.getAllAppointments);
 router.delete('/admin/appointments/:id', authMiddleware, adminController.deleteAppointment);
+
+// Super Admin Routes
+router.get('/super-admin/users', authMiddleware, checkRole(['SUPER_ADMIN']), userManagementController.listAdmins);
+router.post('/super-admin/users', authMiddleware, checkRole(['SUPER_ADMIN']), userManagementController.createAdmin);
+router.put('/super-admin/users/:id', authMiddleware, checkRole(['SUPER_ADMIN']), userManagementController.updateAdmin);
+router.delete('/super-admin/users/:id', authMiddleware, checkRole(['SUPER_ADMIN']), userManagementController.deleteAdmin);
+router.post('/super-admin/users/:id/reset-password', authMiddleware, checkRole(['SUPER_ADMIN']), userManagementController.resetPassword);
+router.get('/super-admin/audit-logs', authMiddleware, checkRole(['SUPER_ADMIN']), userManagementController.getAuditLogs);
 
 module.exports = router;

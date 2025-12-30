@@ -51,6 +51,19 @@ const salonSchema = new mongoose.Schema({
     showAvatar: { type: Boolean, default: true },
   },
   cancellationPolicy: String,
+  role: {
+    type: String,
+    enum: ['SUPER_ADMIN', 'ADMIN'],
+    default: 'ADMIN'
+  },
+  active: {
+    type: Boolean,
+    default: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -83,6 +83,39 @@ const seedAdmin = async () => {
         } else {
             console.log('Professionals already exist.');
         }
+
+        // --- SUPER ADMIN SEEDING ---
+        const SUPER_ADMIN_EMAIL = 'super@sistema.com';
+        let superAdmin = await Salon.findOne({ email: SUPER_ADMIN_EMAIL });
+
+        if (!superAdmin) {
+            console.log('Seeding Super Admin User...');
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash('super123', salt);
+
+            superAdmin = new Salon({
+                name: 'Super Admin System',
+                email: SUPER_ADMIN_EMAIL,
+                password: hashedPassword,
+                phone: '00000000000',
+                role: 'SUPER_ADMIN',
+                workingHours: {} // Empty as it doesn't take appointments
+            });
+
+            await superAdmin.save();
+            console.log('--- Super Admin Created ---');
+            console.log(`Email: ${SUPER_ADMIN_EMAIL}`);
+            console.log(`Password: super123`);
+        } else {
+             // Ensure role is correct if it exists
+             if (superAdmin.role !== 'SUPER_ADMIN') {
+                 superAdmin.role = 'SUPER_ADMIN';
+                 await superAdmin.save();
+                 console.log('Updated existing Super Admin role.');
+             }
+             console.log('Super Admin already exists.');
+        }
+
     } catch (err) {
         console.error('Seeding error:', err);
     }

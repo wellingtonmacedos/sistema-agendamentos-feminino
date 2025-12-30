@@ -18,11 +18,20 @@ const authMiddleware = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // { id, email, ... }
+    req.user = decoded; // { id, email, role, ... }
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Token inválido ou expirado.' });
   }
 };
 
-module.exports = authMiddleware;
+const checkRole = (roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado. Permissão insuficiente.' });
+    }
+    next();
+  };
+};
+
+module.exports = { authMiddleware, checkRole };

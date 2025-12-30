@@ -49,7 +49,10 @@ const ChatSettings = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await axios.put('/api/salon', { chatConfig: config });
+            const res = await axios.put('/api/salon', { chatConfig: config });
+            if (res.data.chatConfig) {
+                 setConfig(prev => ({ ...prev, ...res.data.chatConfig }));
+            }
             setMessage('Configurações salvas com sucesso!');
             setTimeout(() => setMessage(''), 3000);
         } catch (error) {
