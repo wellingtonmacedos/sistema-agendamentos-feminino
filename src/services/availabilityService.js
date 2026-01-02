@@ -43,9 +43,34 @@ const getAvailableSlots = async (salonId, dateStr, professionalId, serviceIds) =
         workDay = salon.workingHours.get(String(dayOfWeek));
     }
 
+    // Fetch Blocks early to check for Arrival Order override
+    const dayStart = startOfDay(date);
+    const dayEnd = endOfDay(date);
+
+    const blocks = await Block.find({
+        salonId,
+        $or: [
+            { professionalId: professionalId },
+            { professionalId: null },
+            { professionalId: { $exists: false } }
+        ],
+        startTime: { $lt: dayEnd },
+        endTime: { $gt: dayStart }
+    });
+
+    // Check if any block is Arrival Order exception
+    if (blocks.some(b => b.type === 'ARRIVAL_ORDER')) {
+        throw { name: 'ArrivalOrder' };
+    }
+
     // If no config or closed
     if (!workDay || !workDay.isOpen) {
         return [];
+    }
+
+    // Check if configured as Arrival Order (Recurrent)
+    if (workDay.isArrivalOrder) {
+        throw { name: 'ArrivalOrder' };
     }
 
     // 3. Settings & Duration
@@ -61,27 +86,14 @@ const getAvailableSlots = async (salonId, dateStr, professionalId, serviceIds) =
     if (isAfter(targetDate, maxDate)) return [];
     if (isBefore(targetDate, today)) return []; // Past days
 
-    // 5. Fetch Conflicts (Appointments & Blocks)
-    const dayStart = startOfDay(date);
-    const dayEnd = endOfDay(date);
+    // 5. Fetch Conflicts (Appointments)
+    // dayStart and dayEnd are already defined above
 
     const appointments = await Appointment.find({
         salonId,
         professionalId,
         startTime: { $gte: dayStart, $lte: dayEnd },
         status: { $ne: 'cancelled' }
-    });
-
-    // Blocks: Global (no profId) OR Specific (profId)
-    const blocks = await Block.find({
-        salonId,
-        $or: [
-            { professionalId: professionalId },
-            { professionalId: null },
-            { professionalId: { $exists: false } }
-        ],
-        startTime: { $lt: dayEnd },
-        endTime: { $gt: dayStart }
     });
 
     // 6. Generate Slots

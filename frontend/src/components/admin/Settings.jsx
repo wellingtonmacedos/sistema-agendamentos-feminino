@@ -17,7 +17,7 @@ const Settings = () => {
     
     // Blocks State
     const [blocks, setBlocks] = useState([]);
-    const [newBlock, setNewBlock] = useState({ start: '', end: '', reason: '' });
+    const [newBlock, setNewBlock] = useState({ start: '', end: '', reason: '', type: 'BLOCK' });
 
     useEffect(() => {
         fetchSettings();
@@ -38,7 +38,13 @@ const Settings = () => {
             // Initialize working hours with defaults if empty
             const defaultHours = {};
             DAYS.forEach((_, index) => {
-                defaultHours[index] = data.workingHours?.[index] || { open: '09:00', close: '18:00', isOpen: index !== 0, breaks: [] };
+                defaultHours[index] = data.workingHours?.[index] || { 
+                    open: '09:00', 
+                    close: '18:00', 
+                    isOpen: index !== 0, 
+                    isArrivalOrder: false,
+                    breaks: [] 
+                };
             });
             setWorkingHours(defaultHours);
             
@@ -88,13 +94,14 @@ const Settings = () => {
             await axios.post('/api/blocks', {
                 startTime: newBlock.start,
                 endTime: newBlock.end,
-                reason: newBlock.reason
+                reason: newBlock.reason,
+                type: newBlock.type // Send the selected type!
             });
             fetchBlocks();
-            setNewBlock({ start: '', end: '', reason: '' });
-            alert('Bloqueio criado!');
+            setNewBlock({ start: '', end: '', reason: '', type: 'BLOCK' }); // Reset with default
+            alert('Configuração salva com sucesso!');
         } catch (error) {
-            alert('Erro ao criar bloqueio');
+            alert('Erro ao criar configuração');
         }
     };
 
@@ -335,8 +342,19 @@ const Settings = () => {
                 {activeTab === 'blocks' && (
                     <div className="space-y-6">
                         <div className="bg-gray-50 p-4 rounded-lg border">
-                            <h4 className="font-medium text-sm text-gray-700 mb-3">Novo Bloqueio (Feriado / Folga)</h4>
-                            <form onSubmit={handleCreateBlock} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <h4 className="font-medium text-sm text-gray-700 mb-3">Nova Exceção (Feriado / Ordem de Chegada)</h4>
+                            <form onSubmit={handleCreateBlock} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                                <div className="md:col-span-1">
+                                    <label className="text-xs text-gray-500">Tipo</label>
+                                    <select 
+                                        value={newBlock.type}
+                                        onChange={e => setNewBlock({...newBlock, type: e.target.value})}
+                                        className="w-full border rounded p-2 text-sm bg-white"
+                                    >
+                                        <option value="BLOCK">Bloqueio Total</option>
+                                        <option value="ARRIVAL_ORDER">Ordem de Chegada</option>
+                                    </select>
+                                </div>
                                 <div>
                                     <label className="text-xs text-gray-500">Início</label>
                                     <input 
@@ -358,7 +376,7 @@ const Settings = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-gray-500">Motivo</label>
+                                    <label className="text-xs text-gray-500">Motivo (Opcional)</label>
                                     <input 
                                         type="text" 
                                         placeholder="Ex: Feriado"
@@ -367,22 +385,28 @@ const Settings = () => {
                                         className="w-full border rounded p-2 text-sm"
                                     />
                                 </div>
-                                <button type="submit" className="bg-red-500 text-white p-2 rounded hover:bg-red-600 text-sm font-medium">
-                                    Bloquear
+                                <button type="submit" className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 text-sm font-medium">
+                                    Salvar
                                 </button>
                             </form>
                         </div>
 
                         <div>
-                            <h4 className="font-medium text-sm text-gray-700 mb-3">Bloqueios Ativos</h4>
+                            <h4 className="font-medium text-sm text-gray-700 mb-3">Configurações Ativas</h4>
                             {blocks.length === 0 ? (
-                                <p className="text-gray-400 text-sm">Nenhum bloqueio cadastrado.</p>
+                                <p className="text-gray-400 text-sm">Nenhuma configuração cadastrada.</p>
                             ) : (
                                 <div className="space-y-2">
                                     {blocks.map(block => (
                                         <div key={block._id} className="flex justify-between items-center p-3 bg-white border rounded hover:shadow-sm">
-                                            <div>
-                                                <div className="font-medium text-gray-800 text-sm">{block.reason || 'Sem motivo'}</div>
+                                            <div className="flex items-center gap-3">
+                                                {block.type === 'ARRIVAL_ORDER' ? (
+                                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">Ordem Chegada</span>
+                                                ) : (
+                                                    <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold">Bloqueio</span>
+                                                )}
+                                                <div>
+                                                    <div className="font-medium text-gray-800 text-sm">{block.reason || (block.type === 'ARRIVAL_ORDER' ? 'Atendimento por Ordem de Chegada' : 'Bloqueio de Agenda')}</div>
                                                 <div className="text-xs text-gray-500">
                                                     {format(new Date(block.startTime), 'dd/MM/yyyy HH:mm')} até {format(new Date(block.endTime), 'dd/MM/yyyy HH:mm')}
                                                 </div>
@@ -390,6 +414,7 @@ const Settings = () => {
                                                     {block.professionalId ? `Profissional: ${block.professionalId.name}` : 'Todo o Estabelecimento'}
                                                 </div>
                                             </div>
+                                        </div>
                                             <button 
                                                 onClick={() => handleDeleteBlock(block._id)}
                                                 className="text-red-400 hover:text-red-600 p-2"

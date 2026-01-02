@@ -114,7 +114,7 @@ exports.deleteService = async (req, res) => {
 
 exports.createBlock = async (req, res) => {
     try {
-        const { professionalId, startTime, endTime, reason } = req.body;
+        const { professionalId, startTime, endTime, reason, type } = req.body;
         // If professionalId is empty string or 'null', treat as undefined (global)
         const profId = (professionalId && professionalId !== 'null' && professionalId !== '') ? professionalId : undefined;
 
@@ -123,7 +123,8 @@ exports.createBlock = async (req, res) => {
             professionalId: profId,
             startTime,
             endTime,
-            reason
+            reason,
+            type: type || 'BLOCK'
         });
         await block.save();
         res.status(201).json(block);

@@ -32,6 +32,10 @@ const scheduleSchema = new mongoose.Schema({
   lunchEnd: {
     type: String, // Format "HH:mm"
     default: null
+  },
+  isArrivalOrder: {
+    type: Boolean,
+    default: false
   }
 });
 

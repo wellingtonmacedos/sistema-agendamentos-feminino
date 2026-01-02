@@ -2,6 +2,8 @@ const availabilityService = require('../services/availabilityService');
 const appointmentService = require('../services/appointmentService');
 const { sendAppointmentConfirmation } = require('../services/notificationService');
 
+const { generateGoogleCalendarUrl, generateICSContent } = require('../utils/calendarUtils');
+
 // Main Handler
 const getAvailability = async (req, res) => {
   try {
@@ -27,6 +29,11 @@ const getAvailability = async (req, res) => {
     res.json(horarios);
 
   } catch (error) {
+    if (error.name === 'ArrivalOrder') {
+        // Return empty slots but with a special header to indicate Arrival Order mode
+        res.set('x-arrival-order', 'true');
+        return res.json([]);
+    }
     console.error(error);
     res.status(500).json({ error: 'Erro interno', details: error.message });
   }
@@ -55,6 +62,33 @@ const createAppointment = async (req, res) => {
 
     // Send Notification (Async, don't block response)
     sendAppointmentConfirmation(novoAgendamento).catch(console.error);
+
+    // Prepare Calendar Links
+    try {
+        const Salon = require('../models/Salon');
+        const salon = await Salon.findById(salao_id);
+        const populatedAppointment = await require('../models/Appointment').findById(novoAgendamento._id)
+            .populate('professionalId')
+            .populate('services');
+
+        if (salon && populatedAppointment) {
+            const googleLink = generateGoogleCalendarUrl(populatedAppointment, salon);
+            // Download link for ICS. Assuming API is hosted at relative path or we return absolute if env var set
+            // For now, return a relative path that the frontend can prefix if needed, or just relative
+            const icsLink = `/api/agendamentos/${novoAgendamento._id}/ics`;
+
+            return res.json({ 
+                sucesso: true, 
+                links: {
+                    google: googleLink,
+                    ics: icsLink
+                }
+            });
+        }
+    } catch (calError) {
+        console.error('Error generating calendar links:', calError);
+        // Fallback to success without links if error occurs
+    }
 
     res.json({ sucesso: true });
 
@@ -279,9 +313,38 @@ const checkCustomer = async (req, res) => {
   }
 };
 
+const downloadICS = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const Appointment = require('../models/Appointment');
+        const Salon = require('../models/Salon');
+
+        const appointment = await Appointment.findById(id).populate('services').populate('professionalId');
+        if (!appointment) {
+            return res.status(404).send('Agendamento não encontrado');
+        }
+
+        const salon = await Salon.findById(appointment.salonId);
+        if (!salon) {
+            return res.status(404).send('Estabelecimento não encontrado');
+        }
+
+        const icsContent = generateICSContent(appointment, salon);
+
+        res.set('Content-Type', 'text/calendar');
+        res.set('Content-Disposition', `attachment; filename=agendamento-${id}.ics`);
+        res.send(icsContent);
+
+    } catch (error) {
+        console.error('Error downloading ICS:', error);
+        res.status(500).send('Erro ao gerar arquivo de calendário');
+    }
+};
+
 module.exports = {
   getAvailability,
   createAppointment,
+  downloadICS, // Export new function
   getServices,
   getSalons,
   getProfessionals,

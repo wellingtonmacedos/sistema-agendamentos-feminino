@@ -22,6 +22,7 @@ const professionalSchema = new mongoose.Schema({
       open: String,
       close: String,
       isOpen: Boolean,
+      isArrivalOrder: { type: Boolean, default: false },
       breaks: [{
         start: String,
         end: String

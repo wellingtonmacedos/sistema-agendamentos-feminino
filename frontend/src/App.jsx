@@ -335,6 +335,15 @@ function App() {
       });
       
       setAvailableSlots(res.data);
+
+      // Check for Arrival Order header
+      if (res.headers['x-arrival-order'] === 'true') {
+        addMessage('Neste dia, o atendimento será realizado por ordem de chegada.');
+        addMessage('Deseja agendar para outra data?');
+        goToStep('ARRIVAL_WARNING');
+        return;
+      }
+
       if (res.data.length > 0) {
         addMessage(`Encontrei estes horários para ${formattedDate}:`);
         goToStep('TIME');
@@ -358,11 +367,13 @@ function App() {
     goToStep('CONFIRM');
   };
 
+  const [calendarLinks, setCalendarLinks] = useState(null);
+
   const handleConfirm = async () => {
     addMessage('Confirmar', 'user');
     setLoading(true);
     try {
-      await axios.post('/api/agendamentos', {
+      const res = await axios.post('/api/agendamentos', {
         salao_id: booking.salon._id,
         profissional_id: booking.professional._id,
         data: booking.date,
@@ -374,6 +385,10 @@ function App() {
       
       // Save phone to cache on success
       localStorage.setItem('customer_phone', booking.clientPhone);
+
+      if (res.data.links) {
+        setCalendarLinks(res.data.links);
+      }
 
       addMessage(`Agendamento Confirmado! 🎉\n${booking.service.name} com ${booking.professional.name}\nDia ${format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'dd/MM')} às ${booking.time}.`);
       goToStep('SUCCESS');
@@ -523,6 +538,50 @@ function App() {
             ))}
           </div>
         );
+      case 'ARRIVAL_WARNING':
+        return (
+          <div className="grid gap-2">
+            <button 
+              onClick={() => {
+                addMessage('Sim, escolher outra data', 'user');
+                goToStep('DATE');
+              }} 
+              className="card hover:opacity-90 text-left flex items-center gap-3 transition-all"
+              style={{ 
+                  backgroundColor: chatConfig.buttonColor, 
+                  color: '#fff' 
+              }}
+            >
+              <div className="bg-white/20 p-2 rounded-full text-white"><Calendar size={20} /></div>
+              <div className="font-medium">Sim, escolher outra data</div>
+            </button>
+            <button 
+              onClick={() => {
+                addMessage('Não, encerrar atendimento', 'user');
+                addMessage('Entendido. Agradecemos o contato!', 'bot');
+                // Reset flow after a delay or just leave it
+                setTimeout(() => {
+                    setStep('INIT');
+                    setMessages([]);
+                    setBooking({
+                        salon: null,
+                        service: null,
+                        professional: null,
+                        date: null,
+                        time: null,
+                        clientName: '',
+                        clientPhone: ''
+                    });
+                }, 3000);
+              }} 
+              className="card hover:opacity-90 text-left flex items-center gap-3 transition-all bg-white border border-slate-200"
+              style={{ color: '#ef4444' }} // Red for cancel
+            >
+              <div className="bg-red-50 p-2 rounded-full text-red-500"><Trash2 size={20} /></div>
+              <div className="font-medium">Não, encerrar atendimento</div>
+            </button>
+          </div>
+        );
       case 'CONFIRM':
         return (
             <div className="card bg-slate-50">
@@ -541,6 +600,55 @@ function App() {
                     style={{ backgroundColor: chatConfig.buttonColor }}
                 >
                     <CheckCircle size={18} /> Confirmar Agendamento
+                </button>
+            </div>
+        );
+      case 'SUCCESS':
+        return (
+            <div className="space-y-3">
+                {calendarLinks && (
+                    <div className="card bg-white border border-slate-200 p-4 rounded-xl shadow-sm mb-3">
+                        <p className="font-medium text-slate-700 mb-3 text-center">Deseja adicionar à sua agenda?</p>
+                        <div className="grid grid-cols-1 gap-2">
+                            <a 
+                                href={calendarLinks.google} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+                            >
+                                <Calendar size={16} className="text-blue-500" /> Google Agenda
+                            </a>
+                            <a 
+                                href={calendarLinks.ics} 
+                                download="agendamento.ics"
+                                className="flex items-center justify-center gap-2 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+                            >
+                                <Calendar size={16} className="text-slate-500" /> Apple Calendar / Outros (.ics)
+                            </a>
+                        </div>
+                    </div>
+                )}
+
+                <button 
+                    onClick={() => {
+                        setStep('INIT');
+                        setMessages([]);
+                        setBooking({
+                            salon: null,
+                            service: null,
+                            professional: null,
+                            date: null,
+                            time: null,
+                            clientName: booking.clientName, // Keep name/phone
+                            clientPhone: booking.clientPhone
+                        });
+                        setCalendarLinks(null); // Reset links
+                        handleMyHistoryClick(); // Go to my appointments or just reset
+                    }}
+                    className="w-full btn-primary"
+                    style={{ backgroundColor: chatConfig.buttonColor }}
+                >
+                    Novo Agendamento
                 </button>
             </div>
         );

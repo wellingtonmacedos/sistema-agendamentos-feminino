@@ -20,6 +20,11 @@ const blockSchema = new mongoose.Schema({
     required: true,
   },
   reason: String,
+  type: {
+    type: String,
+    enum: ['BLOCK', 'ARRIVAL_ORDER'],
+    default: 'BLOCK'
+  }
 });
 
 blockSchema.index({ professionalId: 1, startTime: 1, endTime: 1 });

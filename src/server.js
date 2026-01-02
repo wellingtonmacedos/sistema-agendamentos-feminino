@@ -10,7 +10,9 @@ const app = express();
 const path = require('path');
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    exposedHeaders: ['x-arrival-order']
+}));
 app.use(express.json());
 
 // Serve static files from React app (Frontend)

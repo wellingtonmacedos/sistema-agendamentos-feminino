@@ -21,6 +21,7 @@ router.get('/professionals', appointmentController.getProfessionals);
 router.get('/customers/check', appointmentController.checkCustomer);
 router.get('/my-appointments', appointmentController.getMyAppointments);
 router.delete('/my-appointments/:id', appointmentController.cancelAppointment);
+router.get('/agendamentos/:id/ics', appointmentController.downloadICS);
 
 // Protected: Admin / Management Routes
 

@@ -1,6 +1,6 @@
 {
   "name": "sistema-agendamentos-api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "API REST para SaaS de agendamentos",
   "main": "src/server.js",
   "scripts": {

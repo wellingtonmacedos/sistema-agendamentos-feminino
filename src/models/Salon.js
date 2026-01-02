@@ -23,8 +23,9 @@ const salonSchema = new mongoose.Schema({
       open: String, // "09:00"
       close: String, // "18:00"
       isOpen: Boolean,
+      isArrivalOrder: { type: Boolean, default: false },
       breaks: [{
-        start: String, // "12:00"
+        start: String,
         end: String    // "13:00"
       }]
     }),
