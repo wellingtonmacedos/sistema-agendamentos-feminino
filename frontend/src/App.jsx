@@ -493,10 +493,22 @@ function App() {
             <button 
                 onClick={() => handleProfessionalSelect(null)} 
                 className="card hover:opacity-90 text-left flex items-center gap-3 transition-all"
-                style={{ borderColor: chatConfig.buttonColor, borderWidth: '1px' }}
+                style={{ 
+                    borderColor: chatConfig.buttonColor, 
+                    borderWidth: '2px',
+                    color: chatConfig.buttonColor
+                }}
             >
-                <div className="bg-slate-100 p-2 rounded-full"><Users size={20} /></div>
-                <div className="font-medium">{formatMessage('any_professional')}</div>
+                <div 
+                    className="p-2 rounded-full flex items-center justify-center"
+                    style={{
+                        backgroundColor: chatConfig.buttonColor,
+                        color: '#fff'
+                    }}
+                >
+                    <Users size={20} />
+                </div>
+                <div className="font-bold">{formatMessage('any_professional')}</div>
             </button>
             {professionals.map(p => (
               <button 
