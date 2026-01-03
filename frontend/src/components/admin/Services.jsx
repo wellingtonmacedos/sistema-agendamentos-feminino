@@ -5,10 +5,17 @@ const Services = () => {
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null); // null = list, {} = create, {id...} = edit
+    const [iconPreview, setIconPreview] = useState('');
 
     useEffect(() => {
         fetchServices();
     }, []);
+
+    useEffect(() => {
+        if (editing) {
+            setIconPreview(editing.icon || '');
+        }
+    }, [editing]);
 
     const fetchServices = async () => {
         try {
