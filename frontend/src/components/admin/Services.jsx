@@ -85,6 +85,24 @@ const Services = () => {
                             <input name="duration" type="number" defaultValue={editing.duration} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
                         </div>
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Ícone (Font Awesome)</label>
+                        <div className="flex gap-2 items-center">
+                            <input 
+                                name="icon" 
+                                defaultValue={editing.icon} 
+                                onChange={(e) => setIconPreview(e.target.value)}
+                                placeholder="ex: fa-solid fa-scissors"
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" 
+                            />
+                            <div className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded border flex-shrink-0">
+                                {iconPreview ? <i className={`${iconPreview} text-gray-700 text-lg`}></i> : <span className="text-xs text-gray-400">N/A</span>}
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            <a href="https://fontawesome.com/search?o=r&m=free" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Buscar ícones</a> (ex: fa-solid fa-spa)
+                        </p>
+                    </div>
                     <div className="flex gap-2 pt-4">
                         <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 border rounded text-gray-600">Cancelar</button>
                         <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Salvar</button>

@@ -13,6 +13,10 @@ const serviceSchema = new mongoose.Schema({
     type: Number, // in minutes
     required: true,
   },
+  icon: {
+    type: String, // Font Awesome class (e.g. "fa-solid fa-scissors")
+    required: false,
+  },
   salonId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Salon',

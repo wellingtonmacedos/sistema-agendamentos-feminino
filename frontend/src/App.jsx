@@ -476,7 +476,9 @@ function App() {
                 }}
               >
                 <div className="flex items-center gap-3">
-                    <div className="bg-white/20 p-2 rounded-full text-white"><Scissors size={20} /></div>
+                    <div className="bg-white/20 p-2 rounded-full text-white flex items-center justify-center w-9 h-9">
+                        {s.icon ? <i className={`${s.icon} text-lg`} /> : <Scissors size={20} />}
+                    </div>
                     <div>
                         <div className="font-medium">{s.name}</div>
                         <div className="text-xs opacity-80">{s.duration} min</div>
