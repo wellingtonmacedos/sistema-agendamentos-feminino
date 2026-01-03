@@ -70,19 +70,19 @@ const Services = () => {
         return (
             <div className="bg-white p-6 rounded-xl shadow-sm max-w-lg">
                 <h3 className="text-xl font-bold mb-4">{editing._id ? 'Editar Serviço' : 'Novo Serviço'}</h3>
-                <form onSubmit={handleSave} className="space-y-4">
+                <form key={editing._id || 'new'} onSubmit={handleSave} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Nome do Serviço</label>
-                        <input name="name" defaultValue={editing.name} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
+                        <input name="name" defaultValue={editing.name || ''} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Preço (R$)</label>
-                            <input name="price" type="number" step="0.01" defaultValue={editing.price} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
+                            <input name="price" type="number" step="0.01" defaultValue={editing.price || ''} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Duração (min)</label>
-                            <input name="duration" type="number" defaultValue={editing.duration} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
+                            <input name="duration" type="number" defaultValue={editing.duration || ''} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
                         </div>
                     </div>
                     <div>
@@ -90,7 +90,7 @@ const Services = () => {
                         <div className="flex gap-2 items-center">
                             <input 
                                 name="icon" 
-                                defaultValue={editing.icon} 
+                                defaultValue={editing.icon || ''} 
                                 onChange={(e) => setIconPreview(e.target.value)}
                                 placeholder="ex: fa-solid fa-scissors"
                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" 
