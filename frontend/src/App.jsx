@@ -464,7 +464,7 @@ function App() {
         );
       case 'SERVICE':
         return (
-          <div className="grid gap-2">
+          <div className="grid gap-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {services.map(s => (
               <button 
                 key={s._id} 
