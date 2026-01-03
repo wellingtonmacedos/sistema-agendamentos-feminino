@@ -6,6 +6,8 @@ import { Send, User, Users, Calendar, Clock, Scissors, CheckCircle, Store, Brief
 import clsx from 'clsx';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
+import { defaultTheme } from './config/theme';
+import { formatMessage } from './config/language';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -52,26 +54,49 @@ function App() {
     clientPhone: ''
   });
 
-  const [chatConfig, setChatConfig] = useState({
-    botBubbleColor: '#FFFFFF',
-    botTextColor: '#334155',
-    userBubbleColor: '#1e293b',
-    userTextColor: '#FFFFFF',
-    buttonColor: '#3B82F6',
-    backgroundColor: '#f8fafc',
-    headerColor: '#FFFFFF',
-    headerTextColor: '#000000',
-    assistantName: 'Agendamento Online',
-    avatarUrl: '',
-    showAvatar: true
-   });
+  const [chatConfig, setChatConfig] = useState(defaultTheme);
+
+  // Helper to intelligently merge configs, preferring feminine defaults over legacy blue backend defaults
+  const getIntelligentConfig = (incoming) => {
+      if (!incoming) return {};
+      
+      const legacyDefaults = {
+          botBubbleColor: '#F3F4F6',
+          botTextColor: '#1F2937',
+          userBubbleColor: '#3B82F6',
+          userTextColor: '#FFFFFF',
+          buttonColor: '#3B82F6',
+          backgroundColor: '#F9FAFB',
+          headerColor: '#FFFFFF',
+          headerTextColor: '#1F2937',
+          assistantName: 'Assistente'
+      };
+
+      const isLegacy = (key) => incoming[key] && incoming[key].toUpperCase() === legacyDefaults[key].toUpperCase();
+
+      const newConfig = { ...incoming };
+
+      // If strictly legacy blue, override with new feminine default
+      if (isLegacy('buttonColor')) newConfig.buttonColor = defaultTheme.buttonColor;
+      if (isLegacy('userBubbleColor')) newConfig.userBubbleColor = defaultTheme.userBubbleColor;
+      if (isLegacy('botBubbleColor')) newConfig.botBubbleColor = defaultTheme.botBubbleColor;
+      if (isLegacy('backgroundColor')) newConfig.backgroundColor = defaultTheme.backgroundColor;
+      if (isLegacy('botTextColor')) newConfig.botTextColor = defaultTheme.botTextColor;
+      if (isLegacy('headerTextColor')) newConfig.headerTextColor = defaultTheme.headerTextColor;
+      
+      // Name update
+      if (incoming.assistantName === 'Assistente') newConfig.assistantName = defaultTheme.assistantName;
+
+      return newConfig;
+  };
 
    useEffect(() => {
     const fetchChatConfig = async () => {
         try {
             const res = await axios.get('/api/public/config');
             if (res.data && Object.keys(res.data).length > 0) {
-                setChatConfig(prev => ({ ...prev, ...res.data }));
+                const smartConfig = getIntelligentConfig(res.data);
+                setChatConfig(prev => ({ ...prev, ...smartConfig }));
             }
         } catch (error) {
             console.error("Erro ao carregar config do chat:", error);
@@ -130,7 +155,7 @@ function App() {
 
   const handleMyHistoryClick = async () => {
     if (!booking.clientPhone) {
-        addMessage('Por favor, identifique-se primeiro para ver seus agendamentos.', 'bot');
+        addMessage(formatMessage('identify_first'), 'bot');
         goToStep('IDENTIFY_PHONE');
         return;
     }
@@ -140,13 +165,13 @@ function App() {
         const res = await axios.get(`/api/my-appointments?phone=${booking.clientPhone}`);
         setMyAppointments(res.data);
         if (res.data.length === 0) {
-            addMessage('Você não possui agendamentos ativos no momento.');
+            addMessage(formatMessage('my_appointments_empty'));
         } else {
-            addMessage(`Encontrei ${res.data.length} agendamento(s) ativo(s).`);
+            addMessage(formatMessage('my_appointments_found', { count: res.data.length }));
             goToStep('MY_APPOINTMENTS');
         }
     } catch (err) {
-        addMessage('Erro ao buscar seus agendamentos.');
+        addMessage(formatMessage('error_loading_salons'));
     } finally {
         setLoading(false);
     }
@@ -164,13 +189,13 @@ function App() {
         // Refresh
         const res = await axios.get(`/api/my-appointments?phone=${booking.clientPhone}`);
         setMyAppointments(res.data);
-        addMessage('Agendamento cancelado com sucesso.');
+        addMessage(formatMessage('cancel_success'));
         
         if (res.data.length === 0) {
             handleBack(); 
         }
     } catch (err) {
-        addMessage('Erro ao cancelar agendamento.');
+        addMessage(formatMessage('cancel_error'));
     } finally {
         setLoading(false);
     }
@@ -196,15 +221,15 @@ function App() {
                 localStorage.setItem('customer_phone', val);
                 
                 setBooking(prev => ({ ...prev, clientName: res.data.name }));
-                addMessage(`Olá novamente, **${res.data.name}**! Que bom te ver.`);
+                addMessage(formatMessage('welcome_back', { name: res.data.name }));
                 loadSalons();
             } else {
-                addMessage('Certo. Como é a primeira vez, qual seu **Nome Completo**?');
+                addMessage(formatMessage('ask_name'));
                 goToStep('IDENTIFY_NAME');
             }
         } catch (err) {
             // Fallback if backend fails or offline
-            addMessage('Obrigado. E qual é o seu **Nome Completo**?');
+            addMessage(formatMessage('ask_name'));
             goToStep('IDENTIFY_NAME');
         } finally {
             setLoading(false);
@@ -214,7 +239,7 @@ function App() {
     else if (step === 'IDENTIFY_NAME') {
         addMessage(val, 'user');
         setBooking(prev => ({ ...prev, clientName: val }));
-        addMessage(`Prazer, ${val}!`);
+        addMessage(formatMessage('nice_to_meet', { name: val }));
         loadSalons();
     }
   };
@@ -233,10 +258,10 @@ function App() {
         if (res.data.length > 0) {
              handleSalonSelect(res.data[0], true);
         } else {
-             addMessage('Nenhum estabelecimento encontrado.');
+             addMessage(formatMessage('no_salon'));
         }
     } catch (err) {
-        addMessage('Erro ao carregar salões. Tente recarregar a página.');
+        addMessage(formatMessage('error_loading_salons'));
     } finally {
         setLoading(false);
     }
@@ -250,7 +275,8 @@ function App() {
 
     // Apply Chat Config if available
     if (salon.chatConfig) {
-        setChatConfig(prev => ({ ...prev, ...salon.chatConfig }));
+        const smartConfig = getIntelligentConfig(salon.chatConfig);
+        setChatConfig(prev => ({ ...prev, ...smartConfig }));
     }
     
     setLoading(true);
@@ -260,10 +286,10 @@ function App() {
       // Professionals will be loaded after service selection
       setProfessionals([]);
       
-      addMessage(`Vamos agendar? Escolha o serviço que deseja:`);
+      addMessage(formatMessage('select_service'));
       goToStep('SERVICE');
     } catch (err) {
-      addMessage('Erro ao carregar serviços.');
+      addMessage(formatMessage('error_loading_services'));
     } finally {
       setLoading(false);
     }
@@ -279,21 +305,21 @@ function App() {
         setProfessionals(res.data);
         
         if (res.data.length > 0) {
-            addMessage(`Você tem preferência por algum profissional?`);
+            addMessage(formatMessage('ask_professional'));
             goToStep('PROFESSIONAL');
         } else {
             const allRes = await axios.get(`/api/professionals?salao_id=${booking.salon._id}`);
             if (allRes.data.length > 0) {
                 console.warn("No professionals matched service, falling back to all.");
                 setProfessionals(allRes.data);
-                addMessage(`Você tem preferência por algum profissional?`);
+                addMessage(formatMessage('ask_professional'));
                 goToStep('PROFESSIONAL');
             } else {
-                addMessage('Não há profissionais disponíveis para este serviço no momento.');
+                addMessage(formatMessage('no_professionals_service'));
             }
         }
     } catch (err) {
-        addMessage('Erro ao carregar profissionais.');
+        addMessage(formatMessage('error_loading_professionals'));
     } finally {
         setLoading(false);
     }
@@ -304,11 +330,11 @@ function App() {
         addMessage(prof.name, 'user');
         setBooking(prev => ({ ...prev, professional: prof }));
     } else {
-        addMessage('Sem preferência', 'user');
+        addMessage(formatMessage('any_professional'), 'user');
         setBooking(prev => ({ ...prev, professional: professionals[0] }));
     }
     
-    addMessage('Entendido. Para qual dia você gostaria de verificar a disponibilidade?');
+    addMessage(formatMessage('ask_date'));
     goToStep('DATE');
   };
 
@@ -319,7 +345,7 @@ function App() {
     addMessage(formattedDate, 'user');
     setBooking(prev => ({ ...prev, date: dateStr }));
     
-    addMessage('Consultando agenda...', 'bot');
+    addMessage(formatMessage('checking_schedule'), 'bot');
     setLoading(true);
     
     try {
@@ -338,22 +364,22 @@ function App() {
 
       // Check for Arrival Order header
       if (res.headers['x-arrival-order'] === 'true') {
-        addMessage('Neste dia, o atendimento será realizado por ordem de chegada.');
-        addMessage('Deseja agendar para outra data?');
+        addMessage(formatMessage('arrival_order_warning'));
+        addMessage(formatMessage('ask_another_date'));
         goToStep('ARRIVAL_WARNING');
         return;
       }
 
       if (res.data.length > 0) {
-        addMessage(`Encontrei estes horários para ${formattedDate}:`);
+        addMessage(formatMessage('found_slots', { date: formattedDate }));
         goToStep('TIME');
       } else {
-        addMessage(`Não há horários livres para ${formattedDate}. Por favor, escolha outra data.`);
+        addMessage(formatMessage('no_slots', { date: formattedDate }));
         goToStep('DATE');
       }
     } catch (err) {
       console.error(err);
-      addMessage('Erro ao buscar horários.');
+      addMessage(formatMessage('error_checking_schedule'));
     } finally {
       setLoading(false);
     }
@@ -363,7 +389,7 @@ function App() {
     addMessage(time, 'user');
     setBooking(prev => ({ ...prev, time }));
     
-    addMessage('Perfeito. Por favor, confira os dados do agendamento:');
+    addMessage(formatMessage('confirm_data'));
     goToStep('CONFIRM');
   };
 
@@ -390,10 +416,16 @@ function App() {
         setCalendarLinks(res.data.links);
       }
 
-      addMessage(`Agendamento Confirmado! 🎉\n${booking.service.name} com ${booking.professional.name}\nDia ${format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'dd/MM')} às ${booking.time}.`);
+      addMessage(formatMessage('success_title'));
+      addMessage(formatMessage('success_details', {
+        service: booking.service.name,
+        professional: booking.professional.name,
+        date: format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'dd/MM'),
+        time: booking.time
+      }));
       goToStep('SUCCESS');
     } catch (err) {
-      addMessage('Ocorreu um erro ao finalizar. Tente novamente.');
+      addMessage(formatMessage('error_finalizing'));
     } finally {
       setLoading(false);
     }
@@ -464,7 +496,7 @@ function App() {
                 style={{ borderColor: chatConfig.buttonColor, borderWidth: '1px' }}
             >
                 <div className="bg-slate-100 p-2 rounded-full"><Users size={20} /></div>
-                <div className="font-medium">Sem preferência</div>
+                <div className="font-medium">{formatMessage('any_professional')}</div>
             </button>
             {professionals.map(p => (
               <button 
@@ -543,7 +575,7 @@ function App() {
           <div className="grid gap-2">
             <button 
               onClick={() => {
-                addMessage('Sim, escolher outra data', 'user');
+                addMessage(formatMessage('yes_another_date'), 'user');
                 goToStep('DATE');
               }} 
               className="card hover:opacity-90 text-left flex items-center gap-3 transition-all"
@@ -553,12 +585,12 @@ function App() {
               }}
             >
               <div className="bg-white/20 p-2 rounded-full text-white"><Calendar size={20} /></div>
-              <div className="font-medium">Sim, escolher outra data</div>
+              <div className="font-medium">{formatMessage('yes_another_date')}</div>
             </button>
             <button 
               onClick={() => {
-                addMessage('Não, encerrar atendimento', 'user');
-                addMessage('Entendido. Agradecemos o contato!', 'bot');
+                addMessage(formatMessage('no_end_chat'), 'user');
+                addMessage(formatMessage('end_chat_message'), 'bot');
                 // Reset flow after a delay or just leave it
                 setTimeout(() => {
                     setStep('INIT');
@@ -578,7 +610,7 @@ function App() {
               style={{ color: '#ef4444' }} // Red for cancel
             >
               <div className="bg-red-50 p-2 rounded-full text-red-500"><Trash2 size={20} /></div>
-              <div className="font-medium">Não, encerrar atendimento</div>
+              <div className="font-medium">{formatMessage('no_end_chat')}</div>
             </button>
           </div>
         );
@@ -599,7 +631,7 @@ function App() {
                     className="w-full btn-primary flex justify-center items-center gap-2"
                     style={{ backgroundColor: chatConfig.buttonColor }}
                 >
-                    <CheckCircle size={18} /> Confirmar Agendamento
+                    <CheckCircle size={18} /> {formatMessage('confirm_button')}
                 </button>
             </div>
         );
@@ -801,7 +833,7 @@ function App() {
                 if (res.data.found) {
                     customerFound = true;
                     setBooking(prev => ({ ...prev, clientPhone: cachedPhone, clientName: res.data.name }));
-                    addMessage(`Olá novamente, **${res.data.name}**! 👋 (Reconhecido pelo seu dispositivo)`);
+                    addMessage(formatMessage('welcome_back', { name: res.data.name }));
                     
                     // Skip to Salon selection
                     if (salonsRes.data.length > 0) {
@@ -809,10 +841,10 @@ function App() {
                             handleSalonSelect(salonsRes.data[0], true);
                         } else {
                             setStep('SALON');
-                            addMessage('Selecione o estabelecimento:');
+                            addMessage(formatMessage('select_salon'));
                         }
                     } else {
-                        addMessage('Nenhum estabelecimento encontrado.');
+                        addMessage(formatMessage('no_salon'));
                     }
                 }
             } catch (e) {
@@ -821,13 +853,14 @@ function App() {
         }
 
         if (!customerFound) {
-            addMessage('Olá! Sou seu assistente de agendamentos. 🤖\n\nAntes de começarmos, por favor, me informe seu **número de celular** (com DDD).');
+            addMessage(formatMessage('welcome', { name: chatConfig.assistantName }));
+            addMessage(formatMessage('ask_phone_init'));
             setStep('IDENTIFY_PHONE');
         }
 
       } catch (err) {
         console.error("Erro ao carregar inicial", err);
-        addMessage('Erro ao conectar com o servidor.');
+        addMessage(formatMessage('error_loading_salons'));
       } finally {
         setLoading(false);
       }

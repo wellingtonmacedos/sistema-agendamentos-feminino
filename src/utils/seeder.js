@@ -56,19 +56,23 @@ const seedAdmin = async () => {
         }
 
         // Check and Seed Services
-        const serviceCount = await Service.countDocuments({ salonId: salon._id });
-        if (serviceCount === 0) {
-            console.log('Seeding Services...');
-            const services = [
-                { name: 'Corte de Cabelo', price: 50, duration: 30, salonId: salon._id },
-                { name: 'Barba', price: 30, duration: 20, salonId: salon._id },
-                { name: 'Corte + Barba', price: 70, duration: 50, salonId: salon._id }
-            ];
-            await Service.insertMany(services);
-            console.log('--- Services Created ---');
-        } else {
-            console.log('Services already exist.');
-        }
+        // Always delete existing services to ensure update
+        await Service.deleteMany({ salonId: salon._id });
+        console.log('Removed existing services to apply new feminine salon services...');
+
+        console.log('Seeding Services...');
+        const services = [
+            { name: 'Manicure', price: 35, duration: 45, salonId: salon._id },
+            { name: 'Pedicure', price: 40, duration: 60, salonId: salon._id },
+            { name: 'Design de Sobrancelhas', price: 35, duration: 30, salonId: salon._id },
+            { name: 'Extensão de Cílios', price: 150, duration: 120, salonId: salon._id },
+            { name: 'Corte de Cabelo', price: 90, duration: 60, salonId: salon._id },
+            { name: 'Escova', price: 60, duration: 45, salonId: salon._id },
+            { name: 'Hidratação Capilar', price: 120, duration: 60, salonId: salon._id },
+            { name: 'Maquiagem', price: 180, duration: 60, salonId: salon._id }
+        ];
+        await Service.insertMany(services);
+        console.log('--- Services Created (Feminine Salon) ---');
 
         // Check and Seed Professionals
         const professionalCount = await Professional.countDocuments({ salonId: salon._id });

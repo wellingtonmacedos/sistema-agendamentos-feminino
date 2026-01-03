@@ -1,21 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Save, MessageSquare, User, Send, Bot } from 'lucide-react';
+import { defaultTheme } from '../../config/theme';
 
 const ChatSettings = () => {
     const [config, setConfig] = useState({
-        botBubbleColor: '#F3F4F6',
-        botTextColor: '#1F2937',
-        userBubbleColor: '#3B82F6',
-        userTextColor: '#FFFFFF',
-        buttonColor: '#3B82F6',
-        backgroundColor: '#F9FAFB',
-        headerColor: '#FFFFFF',
-        headerTextColor: '#1F2937',
-        assistantName: 'Assistente',
-        assistantTone: 'neutro',
-        avatarUrl: '',
-        showAvatar: true
+        ...defaultTheme,
+        assistantTone: 'neutro' // Keep this extra field not in theme
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -29,7 +20,34 @@ const ChatSettings = () => {
         try {
             const res = await axios.get('/api/me');
             if (res.data.chatConfig) {
-                setConfig(prev => ({ ...prev, ...res.data.chatConfig }));
+                 // INTELLIGENT MERGE: Detect Legacy Blue Theme and suggest Feminine Pink
+                 const incoming = res.data.chatConfig;
+                 const legacyDefaults = {
+                    botBubbleColor: '#F3F4F6',
+                    botTextColor: '#1F2937',
+                    userBubbleColor: '#3B82F6',
+                    userTextColor: '#FFFFFF',
+                    buttonColor: '#3B82F6',
+                    backgroundColor: '#F9FAFB',
+                    headerColor: '#FFFFFF',
+                    headerTextColor: '#1F2937'
+                 };
+                 
+                 const isLegacy = (key) => incoming[key] && incoming[key].toUpperCase() === legacyDefaults[key].toUpperCase();
+                 const newConfig = { ...incoming };
+                 
+                 // If strictly legacy blue, override with new feminine default
+                 if (isLegacy('buttonColor')) newConfig.buttonColor = defaultTheme.buttonColor;
+                 if (isLegacy('userBubbleColor')) newConfig.userBubbleColor = defaultTheme.userBubbleColor;
+                 if (isLegacy('botBubbleColor')) newConfig.botBubbleColor = defaultTheme.botBubbleColor;
+                 if (isLegacy('backgroundColor')) newConfig.backgroundColor = defaultTheme.backgroundColor;
+                 if (isLegacy('botTextColor')) newConfig.botTextColor = defaultTheme.botTextColor;
+                 if (isLegacy('headerTextColor')) newConfig.headerTextColor = defaultTheme.headerTextColor;
+                 
+                 // Name update check
+                 if (incoming.assistantName === 'Assistente') newConfig.assistantName = defaultTheme.assistantName;
+
+                setConfig(prev => ({ ...prev, ...newConfig }));
             }
         } catch (error) {
             console.error("Erro ao carregar configurações", error);
