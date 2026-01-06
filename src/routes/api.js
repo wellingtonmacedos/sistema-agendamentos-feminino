@@ -70,6 +70,7 @@ router.get('/agendamentos/:id/ics', appointmentController.downloadICS);
 router.get('/admin/customers', authMiddleware, customerController.getCustomers);
 router.post('/admin/customers', authMiddleware, customerController.createCustomer);
 router.put('/admin/customers/:id', authMiddleware, customerController.updateCustomer);
+router.delete('/admin/customers/:id', authMiddleware, customerController.deleteCustomer);
 
 router.put('/salon', authMiddleware, adminController.updateSalon);
 router.get('/admin/reports', authMiddleware, reportController.getBillingReports);

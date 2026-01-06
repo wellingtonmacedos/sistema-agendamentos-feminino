@@ -56,37 +56,23 @@ function App() {
 
   const [chatConfig, setChatConfig] = useState(defaultTheme);
 
-  // Helper to intelligently merge configs, preferring feminine defaults over legacy blue backend defaults
+  // Helper to intelligently merge configs, preferring feminine defaults
   const getIntelligentConfig = (incoming) => {
       if (!incoming) return {};
       
-      const legacyDefaults = {
-          botBubbleColor: '#F3F4F6',
-          botTextColor: '#1F2937',
-          userBubbleColor: '#3B82F6',
-          userTextColor: '#FFFFFF',
-          buttonColor: '#3B82F6',
-          backgroundColor: '#F9FAFB',
-          headerColor: '#FFFFFF',
-          headerTextColor: '#1F2937',
-          assistantName: 'Assistente'
-      };
+      // Start with feminine defaults as the base truth
+      const newConfig = { ...defaultTheme };
 
-      const isLegacy = (key) => incoming[key] && incoming[key].toUpperCase() === legacyDefaults[key].toUpperCase();
-
-      const newConfig = { ...incoming };
-
-      // If strictly legacy blue, override with new feminine default
-      if (isLegacy('buttonColor')) newConfig.buttonColor = defaultTheme.buttonColor;
-      if (isLegacy('userBubbleColor')) newConfig.userBubbleColor = defaultTheme.userBubbleColor;
-      if (isLegacy('botBubbleColor')) newConfig.botBubbleColor = defaultTheme.botBubbleColor;
-      if (isLegacy('backgroundColor')) newConfig.backgroundColor = defaultTheme.backgroundColor;
-      if (isLegacy('botTextColor')) newConfig.botTextColor = defaultTheme.botTextColor;
-      if (isLegacy('headerTextColor')) newConfig.headerTextColor = defaultTheme.headerTextColor;
+      // Allow specific text overrides
+      if (incoming.assistantName && incoming.assistantName !== 'Assistente') {
+          newConfig.assistantName = incoming.assistantName;
+      }
+      if (incoming.avatarUrl) newConfig.avatarUrl = incoming.avatarUrl;
       
-      // Name update
-      if (incoming.assistantName === 'Assistente') newConfig.assistantName = defaultTheme.assistantName;
-
+      // Only allow color overrides if they are NOT the legacy blue/dark defaults
+      // This ensures we stick to the Pink theme unless a very specific custom color is set
+      // For now, to solve the "theme not applied" issue, we will rely heavily on defaultTheme
+      
       return newConfig;
   };
 
@@ -496,26 +482,6 @@ function App() {
       case 'PROFESSIONAL':
         return (
           <div className="grid gap-2">
-            <button 
-                onClick={() => handleProfessionalSelect(null)} 
-                className="card hover:opacity-90 text-left flex items-center gap-3 transition-all"
-                style={{ 
-                    borderColor: chatConfig.buttonColor, 
-                    borderWidth: '2px',
-                    color: chatConfig.buttonColor
-                }}
-            >
-                <div 
-                    className="p-2 rounded-full flex items-center justify-center"
-                    style={{
-                        backgroundColor: chatConfig.buttonColor,
-                        color: '#fff'
-                    }}
-                >
-                    <Users size={20} />
-                </div>
-                <div className="font-bold">{formatMessage('any_professional')}</div>
-            </button>
             {professionals.map(p => (
               <button 
                 key={p._id} 
