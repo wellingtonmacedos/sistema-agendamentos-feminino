@@ -1,11 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+import Cropper from 'react-easy-crop';
+import getCroppedImg from '../../utils/cropImage';
 
 const Services = () => {
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null); // null = list, {} = create, {id...} = edit
     const [iconPreview, setIconPreview] = useState('');
+
+    // Image Upload & Crop State
+    const [imageSrc, setImageSrc] = useState(null);
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+    const [showCropper, setShowCropper] = useState(false);
+    const [croppedImageBlob, setCroppedImageBlob] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
 
     useEffect(() => {
         fetchServices();
@@ -14,19 +25,17 @@ const Services = () => {
     useEffect(() => {
         if (editing) {
             setIconPreview(editing.icon || '');
+            setPreviewUrl(editing.image || null);
+            setCroppedImageBlob(null);
+            setImageSrc(null);
+            setShowCropper(false);
+            setZoom(1);
+            setCrop({ x: 0, y: 0 });
         }
     }, [editing]);
 
     const fetchServices = async () => {
         try {
-            // Need salon ID, usually in user context or just fetch all allowed (since token handles scope)
-            // Using public route filtered by salon logic on backend or just admin specific route
-            // Since public route requires salon_id param, let's use the one that adminController probably should have provided or we use token context.
-            // Wait, getServices is public but requires query param.
-            // Let's use the token to get "me" then fetch services, or simply assume the backend has a GET /services that works for admin?
-            // Current backend: router.get('/services', appointmentController.getServices); -> requires salao_id query.
-            // Let's fetch 'me' first or store salonId in localStorage on login.
-            
             const user = JSON.parse(localStorage.getItem('user'));
             if (user && user.id) {
                 const res = await axios.get(`/api/services?salao_id=${user.id}`);
@@ -39,13 +48,69 @@ const Services = () => {
         }
     };
 
+    const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+        setCroppedAreaPixels(croppedAreaPixels);
+    }, []);
+
+    const handleFileChange = async (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.addEventListener('load', () => {
+                setImageSrc(reader.result);
+                setShowCropper(true);
+                setZoom(1);
+                setCrop({ x: 0, y: 0 });
+            });
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleCropSave = async () => {
+        try {
+            const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
+            setCroppedImageBlob(croppedImage);
+            setPreviewUrl(URL.createObjectURL(croppedImage));
+            setShowCropper(false);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const handleSave = async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+        
+        let imagePath = editing.image;
+
+        if (croppedImageBlob) {
+            const uploadData = new FormData();
+            uploadData.append('image', croppedImageBlob, 'service.jpg');
+            try {
+                // Get token for auth middleware
+                const token = localStorage.getItem('token');
+                const config = {
+                    headers: { 
+                        'Content-Type': 'multipart/form-data',
+                        'Authorization': `Bearer ${token}` 
+                    }
+                };
+                
+                const res = await axios.post('/api/upload', uploadData, config);
+                imagePath = res.data.path;
+            } catch (error) {
+                console.error("Erro no upload", error);
+                alert('Erro ao fazer upload da imagem');
+                return;
+            }
+        }
+
         const data = {
             name: formData.get('name'),
             price: Number(formData.get('price')),
             duration: Number(formData.get('duration')),
+            icon: formData.get('icon'),
+            image: imagePath
         };
 
         try {
@@ -77,11 +142,68 @@ const Services = () => {
         return (
             <div className="bg-white p-6 rounded-xl shadow-sm max-w-lg">
                 <h3 className="text-xl font-bold mb-4">{editing._id ? 'Editar Serviço' : 'Novo Serviço'}</h3>
+                
+                {showCropper && (
+                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+                        <div className="bg-white p-4 rounded-lg w-full max-w-md">
+                            <h4 className="text-lg font-bold mb-2">Ajustar Imagem</h4>
+                            <div className="relative h-64 w-full bg-gray-200 mb-4">
+                                <Cropper
+                                    image={imageSrc}
+                                    crop={crop}
+                                    zoom={zoom}
+                                    aspect={1}
+                                    onCropChange={setCrop}
+                                    onCropComplete={onCropComplete}
+                                    onZoomChange={setZoom}
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700">Zoom</label>
+                                <input
+                                    type="range"
+                                    value={zoom}
+                                    min={1}
+                                    max={3}
+                                    step={0.1}
+                                    aria-labelledby="Zoom"
+                                    onChange={(e) => setZoom(e.target.value)}
+                                    className="w-full"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button type="button" onClick={() => setShowCropper(false)} className="px-4 py-2 border rounded text-gray-600">Cancelar</button>
+                                <button type="button" onClick={handleCropSave} className="px-4 py-2 bg-blue-600 text-white rounded">Confirmar Corte</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <form key={editing._id || 'new'} onSubmit={handleSave} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Nome do Serviço</label>
                         <input name="name" defaultValue={editing.name || ''} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" />
                     </div>
+                    
+                    {/* Image Upload */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Imagem do Serviço</label>
+                        <div className="mt-2 flex items-center gap-4">
+                            <div className="relative w-24 h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center">
+                                {previewUrl ? (
+                                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-xs text-gray-400">Sem imagem</span>
+                                )}
+                            </div>
+                            <label className="cursor-pointer bg-white border border-gray-300 rounded-md shadow-sm px-4 py-2 inline-flex items-center text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                Selecionar Imagem
+                                <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                            </label>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Formato quadrado recomendado.</p>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Preço (R$)</label>
@@ -93,7 +215,7 @@ const Services = () => {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Ícone (Font Awesome)</label>
+                        <label className="block text-sm font-medium text-gray-700">Ícone (Opcional se tiver imagem)</label>
                         <div className="flex gap-2 items-center">
                             <input 
                                 name="icon" 
@@ -106,9 +228,6 @@ const Services = () => {
                                 {iconPreview ? <i className={`${iconPreview} text-gray-700 text-lg`}></i> : <span className="text-xs text-gray-400">N/A</span>}
                             </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                            <a href="https://fontawesome.com/search?o=r&m=free" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Buscar ícones</a> (ex: fa-solid fa-spa)
-                        </p>
                     </div>
                     <div className="flex gap-2 pt-4">
                         <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 border rounded text-gray-600">Cancelar</button>
@@ -131,7 +250,7 @@ const Services = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Serviço</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preço</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duração</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
@@ -140,7 +259,20 @@ const Services = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                         {services.map(s => (
                             <tr key={s._id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-gray-900">{s.name}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                        <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden">
+                                            {s.image ? (
+                                                <img src={s.image} alt={s.name} className="h-full w-full object-cover" />
+                                            ) : (
+                                                s.icon ? <i className={`${s.icon} text-gray-500`}></i> : <span className="text-xs text-gray-400">img</span>
+                                            )}
+                                        </div>
+                                        <div className="ml-4">
+                                            <div className="text-sm font-medium text-gray-900">{s.name}</div>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-gray-600">R$ {s.price.toFixed(2)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-gray-600">{s.duration} min</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

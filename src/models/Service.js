@@ -17,6 +17,10 @@ const serviceSchema = new mongoose.Schema({
     type: String, // Font Awesome class (e.g. "fa-solid fa-scissors")
     required: false,
   },
+  image: {
+    type: String, // Path to uploaded image
+    required: false,
+  },
   salonId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Salon',

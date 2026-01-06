@@ -476,8 +476,12 @@ function App() {
                 }}
               >
                 <div className="flex items-center gap-3">
-                    <div className="bg-white/20 p-2 rounded-full text-white flex items-center justify-center w-9 h-9">
-                        {s.icon ? <i className={`${s.icon} text-lg`} /> : <Scissors size={20} />}
+                    <div className={`bg-white/20 ${s.image ? 'p-0' : 'p-2'} rounded-full text-white flex items-center justify-center w-12 h-12 overflow-hidden flex-shrink-0`}>
+                        {s.image ? (
+                            <img src={s.image} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                            s.icon ? <i className={`${s.icon} text-lg`} /> : <Scissors size={20} />
+                        )}
                     </div>
                     <div>
                         <div className="font-medium">{s.name}</div>
