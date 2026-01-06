@@ -76,10 +76,13 @@ exports.deleteProfessional = async (req, res) => {
 
 exports.createService = async (req, res) => {
   try {
+    console.log('[Admin] Creating service. Body:', req.body);
     const service = new Service({ ...req.body, salonId: req.user.id });
     await service.save();
+    console.log('[Admin] Service created:', service);
     res.status(201).json(service);
   } catch (error) {
+    console.error('[Admin] Error creating service:', error);
     res.status(400).json({ error: error.message });
   }
 };
@@ -87,14 +90,31 @@ exports.createService = async (req, res) => {
 exports.updateService = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`[Admin] Updating service ${id}. Body:`, req.body);
+    
+    const updateData = {
+      name: req.body.name,
+      price: req.body.price,
+      duration: req.body.duration,
+      icon: req.body.icon,
+    };
+
+    if (req.body.image) {
+        updateData.image = req.body.image;
+    }
+
+    console.log('[Admin] Constructed update data:', updateData);
+
     const service = await Service.findOneAndUpdate(
       { _id: id, salonId: req.user.id },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!service) return res.status(404).json({ error: 'Serviço não encontrado' });
+    console.log('[Admin] Service updated result:', service);
     res.json(service);
   } catch (error) {
+    console.error('[Admin] Error updating service:', error);
     res.status(400).json({ error: error.message });
   }
 };

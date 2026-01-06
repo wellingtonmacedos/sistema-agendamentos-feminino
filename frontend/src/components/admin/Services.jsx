@@ -16,6 +16,7 @@ const Services = () => {
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
     const [showCropper, setShowCropper] = useState(false);
     const [croppedImageBlob, setCroppedImageBlob] = useState(null);
+    const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
 
     useEffect(() => {
@@ -27,6 +28,7 @@ const Services = () => {
             setIconPreview(editing.icon || '');
             setPreviewUrl(editing.image || null);
             setCroppedImageBlob(null);
+            setSelectedFile(null);
             setImageSrc(null);
             setShowCropper(false);
             setZoom(1);
@@ -55,9 +57,12 @@ const Services = () => {
     const handleFileChange = async (e) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
+            setSelectedFile(file);
+            
             const reader = new FileReader();
             reader.addEventListener('load', () => {
                 setImageSrc(reader.result);
+                setPreviewUrl(reader.result);
                 setShowCropper(true);
                 setZoom(1);
                 setCrop({ x: 0, y: 0 });
@@ -83,9 +88,13 @@ const Services = () => {
         
         let imagePath = editing.image;
 
-        if (croppedImageBlob) {
+        const fileToUpload = croppedImageBlob || selectedFile;
+
+        if (fileToUpload) {
             const uploadData = new FormData();
-            uploadData.append('image', croppedImageBlob, 'service.jpg');
+            // If it's a blob (cropped), give it a name. If it's a file, it already has one, but we can override or let it be.
+            // Multer usually takes the filename from the FormData.
+            uploadData.append('image', fileToUpload, fileToUpload.name || 'service.jpg');
             try {
                 // Get token for auth middleware
                 const token = localStorage.getItem('token');
