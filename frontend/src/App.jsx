@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { format, addDays, startOfToday, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Send, User, Users, Calendar, Clock, Scissors, CheckCircle, Store, Briefcase, Lock, Trash2, ArrowLeft, History } from 'lucide-react';
+import { Send, User, Users, Calendar, Clock, Scissors, CheckCircle, Store, Briefcase, Lock, Trash2, ArrowLeft, ArrowRight, History } from 'lucide-react';
 import clsx from 'clsx';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
@@ -46,7 +46,7 @@ function App() {
   // Selection
   const [booking, setBooking] = useState({
     salon: null,
-    service: null,
+    services: [],
     professional: null,
     date: null,
     time: null,
@@ -281,27 +281,51 @@ function App() {
     }
   };
 
-  const handleServiceSelect = async (service) => {
-    addMessage(service.name, 'user');
-    setBooking(prev => ({ ...prev, service }));
+  const handleServiceSelect = (service) => {
+    setBooking(prev => {
+        const exists = prev.services.find(s => s._id === service._id);
+        if (exists) {
+            return { ...prev, services: prev.services.filter(s => s._id !== service._id) };
+        }
+        return { ...prev, services: [...prev.services, service] };
+    });
+  };
+
+  const handleServicesConfirm = async () => {
+    if (booking.services.length === 0) return;
+
+    const names = booking.services.map(s => s.name).join(', ');
+    addMessage(names, 'user');
     
     setLoading(true);
     try {
-        const res = await axios.get(`/api/professionals?salao_id=${booking.salon._id}&service_id=${service._id}`);
-        setProfessionals(res.data);
+        // Fetch all professionals for the salon to filter client-side
+        const res = await axios.get(`/api/professionals?salao_id=${booking.salon._id}`);
+        const allProfs = res.data;
         
-        if (res.data.length > 0) {
+        // Filter professionals who perform ALL selected services
+        const selectedIds = booking.services.map(s => s._id);
+        
+        const validProfs = allProfs.filter(p => {
+            if (!p.services || p.services.length === 0) return false;
+            // Check if professional has all selected services
+            return selectedIds.every(id => p.services.includes(id));
+        });
+
+        if (validProfs.length > 0) {
+            setProfessionals(validProfs);
             addMessage(formatMessage('ask_professional'));
             goToStep('PROFESSIONAL');
         } else {
-            const allRes = await axios.get(`/api/professionals?salao_id=${booking.salon._id}`);
-            if (allRes.data.length > 0) {
-                console.warn("No professionals matched service, falling back to all.");
-                setProfessionals(allRes.data);
-                addMessage(formatMessage('ask_professional'));
-                goToStep('PROFESSIONAL');
+            // Fallback: If no exact match, try to show all but warn? 
+            // Or strictly enforce. For now, let's enforce but fallback to all if empty like before
+            if (allProfs.length > 0) {
+                 console.warn("No professionals matched all services, falling back to all.");
+                 setProfessionals(allProfs);
+                 addMessage(formatMessage('ask_professional'));
+                 goToStep('PROFESSIONAL');
             } else {
-                addMessage(formatMessage('no_professionals_service'));
+                 addMessage(formatMessage('no_professionals_service'));
             }
         }
     } catch (err) {
@@ -335,13 +359,13 @@ function App() {
     setLoading(true);
     
     try {
-      const { salon, professional, service } = booking;
+      const { salon, professional, services } = booking;
       
       const res = await axios.get('/api/disponibilidade/horarios', {
         params: {
           salao_id: salon._id,
           profissional_id: booking.professional?._id || professional._id,
-          servicos: booking.service?._id || service._id,
+          servicos: services.map(s => s._id),
           data: dateStr
         }
       });
@@ -390,7 +414,7 @@ function App() {
         profissional_id: booking.professional._id,
         data: booking.date,
         hora_inicio: booking.time,
-        servicos: [booking.service._id],
+        servicos: booking.services.map(s => s._id),
         cliente: booking.clientName,
         telefone: booking.clientPhone
       });
@@ -404,7 +428,7 @@ function App() {
 
       addMessage(formatMessage('success_title'));
       addMessage(formatMessage('success_details', {
-        service: booking.service.name,
+        service: booking.services.map(s => s.name).join(', '),
         professional: booking.professional.name,
         date: format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'dd/MM'),
         time: booking.time
@@ -450,33 +474,85 @@ function App() {
         );
       case 'SERVICE':
         return (
-          <div className="grid gap-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-            {services.map(s => (
-              <button 
-                key={s._id} 
-                onClick={() => handleServiceSelect(s)} 
-                className="card hover:opacity-90 text-left flex justify-between items-center transition-all border border-transparent hover:border-current"
-                style={{ 
-                    backgroundColor: chatConfig.buttonColor, 
-                    color: '#fff' 
-                }}
-              >
-                <div className="flex items-center gap-3">
-                    <div className={`bg-white/20 ${s.image ? 'p-0' : 'p-2'} rounded-full text-white flex items-center justify-center w-12 h-12 overflow-hidden flex-shrink-0`}>
-                        {s.image ? (
-                            <img src={s.image} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            s.icon ? <i className={`${s.icon} text-lg`} /> : <Scissors size={20} />
+          <div className="flex flex-col gap-3 animate-fade-in">
+            <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x custom-scrollbar -mx-1 px-1">
+                {services.map(s => {
+                  const isSelected = booking.services.some(sel => sel._id === s._id);
+                  return (
+                    <button 
+                        key={s._id} 
+                        onClick={() => handleServiceSelect(s)} 
+                        className={clsx(
+                            "flex-none w-52 rounded-xl flex flex-col justify-between items-start transition-all snap-center border-2 relative group overflow-hidden bg-white shadow-lg",
+                            isSelected ? "ring-2 ring-accent ring-offset-2 scale-[1.02]" : "opacity-95 hover:opacity-100 hover:scale-[1.01]"
                         )}
-                    </div>
-                    <div>
-                        <div className="font-medium">{s.name}</div>
-                        <div className="text-xs opacity-80">{s.duration} min</div>
-                    </div>
-                </div>
-                <div className="font-bold">R$ {s.price.toFixed(2)}</div>
-              </button>
-            ))}
+                        style={{ 
+                            borderColor: isSelected ? chatConfig.buttonColor : 'transparent',
+                            boxShadow: isSelected ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)'
+                        }}
+                    >
+                        {/* Image Header Area */}
+                        <div className="w-full h-32 relative bg-gray-100 flex items-center justify-center">
+                             {s.image ? (
+                                 <img src={s.image} alt={s.name} className="w-full h-full object-cover" />
+                             ) : (
+                                 <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: chatConfig.buttonColor, opacity: 0.8 }}>
+                                     {s.icon ? <i className={`${s.icon} text-3xl text-white`} /> : <Scissors size={32} className="text-white" />}
+                                 </div>
+                             )}
+                             
+                             {/* Selection Indicator Overlay */}
+                             <div className="absolute top-2 right-2 z-10">
+                                {isSelected ? (
+                                    <div className="bg-white text-green-600 rounded-full p-0.5 shadow-md animate-in zoom-in duration-200">
+                                        <CheckCircle size={18} fill="currentColor" className="text-white" />
+                                    </div>
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full border-2 border-white/60 bg-black/10 backdrop-blur-sm group-hover:border-white transition-colors shadow-sm" />
+                                )}
+                             </div>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="w-full p-2.5 flex flex-col justify-between flex-grow" 
+                             style={{ backgroundColor: chatConfig.buttonColor, color: '#fff' }}>
+                            <div className="font-bold text-sm mb-0.5 leading-tight line-clamp-2 h-9 flex items-start text-left">
+                                {s.name}
+                            </div>
+                            
+                            <div className="w-full h-px bg-white/20 my-1"></div>
+
+                            <div className="flex justify-between items-end text-xs opacity-95 w-full">
+                                <span className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded text-[10px]">
+                                    <Clock size={10}/> {s.duration} min
+                                </span>
+                                <span className="font-bold text-base">R$ {s.price.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </button>
+                  );
+                })}
+            </div>
+            
+            {/* Scroll Indicator */}
+            <div className="flex items-center justify-center gap-2 text-gray-400 text-xs animate-pulse">
+                <ArrowLeft size={12} />
+                <span>Arraste para ver mais</span>
+                <ArrowRight size={12} />
+            </div>
+            
+            {booking.services.length > 0 && (
+                <button
+                    onClick={handleServicesConfirm}
+                    className="w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex justify-center items-center gap-2 mt-2 hover:brightness-110"
+                    style={{ backgroundColor: chatConfig.buttonColor }}
+                >
+                    <span>Confirmar Seleção</span>
+                    <span className="bg-white text-pink-600 px-2 py-0.5 rounded-full text-xs font-extrabold shadow-sm">
+                        {booking.services.length}
+                    </span>
+                </button>
+            )}
           </div>
         );
       case 'PROFESSIONAL':
@@ -581,7 +657,7 @@ function App() {
                     setMessages([]);
                     setBooking({
                         salon: null,
-                        service: null,
+                        services: [],
                         professional: null,
                         date: null,
                         time: null,
@@ -605,10 +681,10 @@ function App() {
                 <div className="text-sm space-y-1 mb-4">
                     <p><span className="text-gray-500">Cliente:</span> {booking.clientName}</p>
                     <p><span className="text-gray-500">Telefone:</span> {booking.clientPhone}</p>
-                    <p><span className="text-gray-500">Serviço:</span> {booking.service?.name}</p>
+                    <p><span className="text-gray-500">Serviços:</span> {booking.services.map(s => s.name).join(', ')}</p>
                     <p><span className="text-gray-500">Profissional:</span> {booking.professional?.name}</p>
                     <p><span className="text-gray-500">Data:</span> {booking.date && format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')} às {booking.time}</p>
-                    <p><span className="text-gray-500">Total:</span> R$ {booking.service?.price.toFixed(2)}</p>
+                    <p><span className="text-gray-500">Total:</span> R$ {booking.services.reduce((sum, s) => sum + s.price, 0).toFixed(2)}</p>
                 </div>
                 <button 
                     onClick={handleConfirm} 
@@ -651,7 +727,7 @@ function App() {
                         setMessages([]);
                         setBooking({
                             salon: null,
-                            service: null,
+                            services: [],
                             professional: null,
                             date: null,
                             time: null,
@@ -804,7 +880,8 @@ function App() {
         setSalons(salonsRes.data);
         
         if (salonsRes.data.length === 1 && salonsRes.data[0].chatConfig) {
-            setChatConfig(prev => ({ ...prev, ...salonsRes.data[0].chatConfig }));
+            const smartConfig = getIntelligentConfig(salonsRes.data[0].chatConfig);
+            setChatConfig(prev => ({ ...prev, ...smartConfig }));
         }
 
         // CACHE CHECK
@@ -952,9 +1029,9 @@ function App() {
                )}
                <div className="bg-white border border-slate-100 shadow-sm rounded-2xl rounded-tl-none p-3">
                  <div className="flex gap-1">
-                   <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
-                   <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></span>
-                   <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></span>
+                   <span className="w-2 h-2 bg-accent rounded-full animate-bounce"></span>
+                   <span className="w-2 h-2 bg-accent rounded-full animate-bounce delay-75"></span>
+                   <span className="w-2 h-2 bg-accent rounded-full animate-bounce delay-150"></span>
                  </div>
                </div>
              </div>

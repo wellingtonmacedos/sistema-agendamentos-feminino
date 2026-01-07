@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --accent-color: #3b82f6;
+  --accent-color: #DB2777;
 }
 
 @layer components {
